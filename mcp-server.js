@@ -1,15 +1,50 @@
 #!/usr/bin/env node
 // mcp-server.js — Dev tooling MCP server (stdio)
 // Persistent across sessions. Configured in Claude Desktop with --scope user.
-// Tools: run_tests, register_mcp, restart_desktop
+// Tools: run_tests, register_mcp, restart_desktop, self_test, enable_mcp
 
 import readline from 'node:readline'
-import { execSync } from 'node:child_process'
+import { execFileSync, execSync } from 'node:child_process'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve, isAbsolute } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
+
+// --- Input validation ---
+
+function validatePath(p) {
+  if (typeof p !== 'string' || !p.trim()) throw new Error('path is required')
+  if (!isAbsolute(p)) throw new Error(`path must be absolute: ${p}`)
+  // Block shell metacharacters in path — defense in depth even with execFileSync
+  if (/[;&|`$(){}!#]/.test(p)) throw new Error(`path contains forbidden characters: ${p}`)
+  return resolve(p)
+}
+
+function validateName(n) {
+  if (typeof n !== 'string' || !n.trim()) throw new Error('name is required')
+  // MCP server names: alphanumeric, dash, underscore only
+  if (!/^[a-zA-Z0-9_-]+$/.test(n)) throw new Error(`name must be alphanumeric/dash/underscore only: ${n}`)
+  return n
+}
+
+function validateCommand(c) {
+  if (typeof c !== 'string' || !c.trim()) throw new Error('command is required')
+  // Command: alphanumeric, dash, underscore, dot, slash only
+  if (!/^[a-zA-Z0-9_./-]+$/.test(c)) throw new Error(`command contains forbidden characters: ${c}`)
+  return c
+}
+
+function validateArgs(args) {
+  if (!args) return []
+  if (!Array.isArray(args)) throw new Error('args must be an array')
+  return args.map((a, i) => {
+    if (typeof a !== 'string') throw new Error(`args[${i}] must be a string`)
+    // Block shell metacharacters in args
+    if (/[;&|`$(){}!#]/.test(a)) throw new Error(`args[${i}] contains forbidden characters: ${a}`)
+    return a
+  })
+}
 
 // --- Helpers ---
 
@@ -23,28 +58,36 @@ function findProjectRoot(startPath) {
   return null
 }
 
-function exec(cmd, opts = {}) {
-  return execSync(cmd, { encoding: 'utf-8', timeout: opts.timeout || 15_000, env: { ...process.env, FORCE_COLOR: '0' }, ...opts })
-}
-
 // --- Tool implementations ---
 
-function runTests(path) {
+function runTests(rawPath) {
+  const path = validatePath(rawPath)
   const root = findProjectRoot(path)
   if (!root) return { isError: true, text: `No project root found for ${path}` }
   try {
-    return { isError: false, text: exec(`npx vitest run ${path} --reporter=verbose`, { cwd: root, timeout: 120_000 }) }
+    const output = execFileSync('npx', ['vitest', 'run', path, '--reporter=verbose'], {
+      cwd: root, encoding: 'utf-8', timeout: 120_000,
+      env: { ...process.env, FORCE_COLOR: '0' },
+    })
+    return { isError: false, text: output }
   } catch (e) {
     return { isError: false, text: (e.stdout || '') + '\n' + (e.stderr || '') + `\nexit code: ${e.status}` }
   }
 }
 
-function registerMcp({ name, command, args, cwd, scope }) {
-  const serverDef = { command, args: args || [] }
-  if (cwd) serverDef.cwd = cwd
+function registerMcp({ name: rawName, command: rawCmd, args: rawArgs, cwd: rawCwd, scope }) {
+  const name = validateName(rawName)
+  const command = validateCommand(rawCmd)
+  const args = validateArgs(rawArgs)
+  const serverDef = { command, args }
+  if (rawCwd) serverDef.cwd = validatePath(rawCwd)
   let log = ''
 
-  // 1. Write to Claude Desktop config (the one Desktop actually reads)
+  // Validate scope
+  const validScopes = ['user', 'local', 'project']
+  const s = validScopes.includes(scope) ? scope : 'user'
+
+  // 1. Write to Claude Desktop config
   const desktopConfigPath = join(process.env.HOME || '', 'Library/Application Support/Claude/claude_desktop_config.json')
   try {
     const raw = existsSync(desktopConfigPath) ? readFileSync(desktopConfigPath, 'utf-8') : '{}'
@@ -57,12 +100,11 @@ function registerMcp({ name, command, args, cwd, scope }) {
     log += `Desktop config write failed: ${e.message}\n`
   }
 
-  // 2. Also register in CLI config via claude mcp add-json
+  // 2. CLI config — using execFileSync (no shell injection)
   const cliConfig = { type: 'stdio', ...serverDef }
-  const s = scope || 'user'
   try {
-    try { exec(`claude mcp remove ${name} -s ${s}`) } catch {}
-    exec(`claude mcp add-json ${name} '${JSON.stringify(cliConfig)}' --scope ${s}`)
+    try { execFileSync('claude', ['mcp', 'remove', name, '-s', s], { encoding: 'utf-8', timeout: 10_000 }) } catch {}
+    execFileSync('claude', ['mcp', 'add-json', name, JSON.stringify(cliConfig), '--scope', s], { encoding: 'utf-8', timeout: 10_000 })
     log += `CLI config updated: ${name} (scope=${s})\n`
   } catch (e) {
     log += `CLI config failed: ${e.message}\n`
@@ -74,9 +116,9 @@ function registerMcp({ name, command, args, cwd, scope }) {
 
 function restartDesktop() {
   try {
-    try { exec('pkill -x "Claude"', { timeout: 5000 }) } catch {}
-    exec('sleep 2', { timeout: 5000 })
-    exec('open -a "Claude"', { timeout: 5000 })
+    try { execFileSync('pkill', ['-x', 'Claude'], { timeout: 5000 }) } catch {}
+    execSync('sleep 2', { timeout: 5000 })
+    execFileSync('open', ['-a', 'Claude'], { timeout: 5000 })
     return { isError: false, text: 'Claude Desktop killed and relaunched. Start a new conversation.' }
   } catch (e) {
     return { isError: true, text: `restart failed: ${e.message}` }
@@ -100,7 +142,7 @@ const TOOLS = [
     inputSchema: {
       type: 'object', required: ['name', 'command'],
       properties: {
-        name: { type: 'string', description: 'Server name (e.g. "my-server")' },
+        name: { type: 'string', description: 'Server name — alphanumeric, dash, underscore only' },
         command: { type: 'string', description: 'Command to run (e.g. "node")' },
         args: { type: 'array', items: { type: 'string' }, description: 'Command arguments (e.g. ["mcp-server.js"])' },
         cwd: { type: 'string', description: 'Working directory (absolute path)' },
@@ -124,7 +166,7 @@ const TOOLS = [
     inputSchema: {
       type: 'object', required: ['name', 'command'],
       properties: {
-        name: { type: 'string', description: 'Server name' },
+        name: { type: 'string', description: 'Server name — alphanumeric, dash, underscore only' },
         command: { type: 'string', description: 'Command to run (e.g. "node")' },
         args: { type: 'array', items: { type: 'string' }, description: 'Command arguments' },
         cwd: { type: 'string', description: 'Working directory (absolute path)' },
@@ -170,7 +212,7 @@ function handleRequest({ id, method, params }) {
       respond(id, {
         protocolVersion: '2024-11-05',
         capabilities: { tools: {} },
-        serverInfo: { name: 'devMCP', version: '1.1.0' },
+        serverInfo: { name: 'devMCP', version: '1.2.0' },
       })
       break
     case 'notifications/initialized': break
@@ -180,8 +222,12 @@ function handleRequest({ id, method, params }) {
     case 'tools/call': {
       const handler = HANDLERS[params?.name]
       if (!handler) { respondError(id, -32601, `Unknown tool: ${params?.name}`); break }
-      const result = handler(params?.arguments || {})
-      respond(id, { content: [{ type: 'text', text: result.text }], isError: result.isError || false })
+      try {
+        const result = handler(params?.arguments || {})
+        respond(id, { content: [{ type: 'text', text: result.text }], isError: result.isError || false })
+      } catch (e) {
+        respond(id, { content: [{ type: 'text', text: `Validation error: ${e.message}` }], isError: true })
+      }
       break
     }
     default:

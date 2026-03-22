@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 // install.js — Register devMCP in Claude Desktop config AND Claude CLI config.
-// Usage: node install.js  (or: npx devMCP)
+// Usage: node install.js
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
-import { execSync } from 'node:child_process'
+import { execFileSync } from 'node:child_process'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -30,18 +30,14 @@ try {
   ok = false
 }
 
-// --- 2. Claude CLI config ---
-const extraPaths = ['/opt/homebrew/bin', '/opt/homebrew/sbin', `${home}/.npm-global/bin`, '/usr/local/bin'].join(':')
-const env = { ...process.env, PATH: `${extraPaths}:${process.env.PATH || ''}` }
-
+// --- 2. Claude CLI config (no shell — execFileSync) ---
 try {
-  try { execSync(`claude mcp remove ${name} -s user`, { encoding: 'utf-8', env, timeout: 10_000 }) } catch {}
+  try { execFileSync('claude', ['mcp', 'remove', name, '-s', 'user'], { encoding: 'utf-8', timeout: 10_000 }) } catch {}
   const cliConfig = { type: 'stdio', ...serverDef }
-  execSync(`claude mcp add-json ${name} '${JSON.stringify(cliConfig)}' --scope user`, { encoding: 'utf-8', env, timeout: 10_000 })
+  execFileSync('claude', ['mcp', 'add-json', name, JSON.stringify(cliConfig), '--scope', 'user'], { encoding: 'utf-8', timeout: 10_000 })
   console.log(`✅ CLI config: ~/.claude.json (scope=user)`)
 } catch (e) {
   console.log(`⚠️  CLI config failed (claude CLI not found?): ${e.message}`)
-  // Not fatal — Desktop config is more important
 }
 
 // --- Done ---
@@ -51,7 +47,7 @@ if (ok) {
   console.log('  1. Restart Claude Desktop (Cmd+Q then reopen)')
   console.log('  2. Start a new conversation')
   console.log('  3. If using CLI: start a new claude session')
-  console.log(`\nTools available: run_tests, enable_mcp, register_mcp, restart_desktop`)
+  console.log(`\nTools available: run_tests, self_test, enable_mcp, register_mcp, restart_desktop`)
 } else {
   console.log('\n⚠️  Partial install. Check errors above.')
   process.exit(1)
