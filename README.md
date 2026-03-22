@@ -11,9 +11,10 @@ Bootstrap MCP server for Claude. Register once, available in every conversation 
 - `restart_desktop` — Kill Claude Desktop and relaunch it. Full process tree cleanup.
 - `enable_mcp` — Register a new MCP server + restart in one shot. The tool you use to add other MCP servers (not devMCP tools — use extensions for that).
 
-Add your own tools via the `extensions/` folder — see [Extensions](#extensions).
+**Custom tools:**
+- Add your own tools via the `extensions/` folder — see **[Extensions](#extensions)**.
 
-**The bootstrap problem:** Claude can't register MCP tools without already having a tool to do it. devMCP is the one you register by hand. After that, Claude registers everything else itself.
+**devMCP solves the MCP bootstrap chores:** Claude can't register MCP tools without already having a tool to do it. devMCP is the one you register by hand. After that, Claude registers everything else itself.
 
 ## Install
 
