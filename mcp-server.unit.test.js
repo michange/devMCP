@@ -1,6 +1,8 @@
 // mcp-server.unit.test.js — Tests for devMCP via JSON-RPC over stdio.
 // Each test spawns the real mcp-server.js process. No mocks.
 // register_mcp uses a sandboxed HOME to avoid touching real configs.
+// Extensions may add tools — core tests verify the 5 core tools are present,
+// not that they are the only tools.
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { spawn } from 'node:child_process'
@@ -12,6 +14,8 @@ import { fileURLToPath } from 'node:url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const SERVER = join(__dirname, 'mcp-server.js')
+
+const CORE_TOOLS = ['enable_mcp', 'register_mcp', 'restart_desktop', 'run_tests', 'self_test']
 
 // --- Helpers: spawn server, send JSON-RPC, get response ---
 
@@ -80,12 +84,15 @@ describe('MCP protocol', () => {
     expect(res.result.capabilities.tools).toEqual({})
   })
 
-  it('tools/list returns 5 tools', async () => {
+  it('tools/list includes all 5 core tools', async () => {
     server = spawnServer()
     server.send(rpc('initialize', {}, 1))
     const res = await server.sendAndWait(rpc('tools/list', {}, 2))
     const names = res.result.tools.map(t => t.name).sort()
-    expect(names).toEqual(['enable_mcp', 'register_mcp', 'restart_desktop', 'run_tests', 'self_test'])
+    for (const core of CORE_TOOLS) {
+      expect(names).toContain(core)
+    }
+    expect(names.length).toBeGreaterThanOrEqual(CORE_TOOLS.length)
   })
 
   it('unknown tool returns error', async () => {
@@ -200,16 +207,12 @@ describe('restart_desktop', () => {
   afterEach(() => { server?.kill() })
 
   it('returns a response (does not crash)', async () => {
-    // We can't really test kill/relaunch in CI, but we verify the tool
-    // returns a response without throwing. On macOS it will actually
-    // restart Desktop; in test we just check the shape.
     server = spawnServer()
     server.send(rpc('initialize', {}, 1))
     const res = await server.sendAndWait(rpc('tools/call', {
       name: 'restart_desktop',
       arguments: {},
     }, 2))
-    // Either success or error — but it responded, didn't hang
     expect(res.result.content[0].text).toBeTruthy()
   })
 })
@@ -239,8 +242,6 @@ describe('enable_mcp', () => {
     }, 2))
     const text = res.result.content[0].text
     expect(text).toContain('Desktop config updated')
-    // restart part — may succeed or fail depending on whether Claude Desktop is running
-    // but the register part must have worked
     const configPath = join(fakeHome, 'Library/Application Support/Claude/claude_desktop_config.json')
     const config = JSON.parse(readFileSync(configPath, 'utf-8'))
     expect(config.mcpServers['new-srv']).toEqual({ command: 'node', args: ['new.js'] })

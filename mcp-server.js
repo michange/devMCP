@@ -1,50 +1,18 @@
 #!/usr/bin/env node
 // mcp-server.js — Dev tooling MCP server (stdio)
 // Persistent across sessions. Configured in Claude Desktop with --scope user.
-// Tools: run_tests, register_mcp, restart_desktop, self_test, enable_mcp
+// Core tools: run_tests, register_mcp, restart_desktop, self_test, enable_mcp
+// Extensions loaded dynamically from extensions/*/index.js at boot.
 
 import readline from 'node:readline'
-import { execFileSync, execSync } from 'node:child_process'
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { execFileSync, spawn } from 'node:child_process'
+import { existsSync, readFileSync, writeFileSync, readdirSync, statSync, mkdtempSync } from 'node:fs'
 import { dirname, join, resolve, isAbsolute } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { tmpdir } from 'node:os'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+import { validatePath, validateName, validateCommand, validateArgs } from './validators.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-
-// --- Input validation ---
-
-function validatePath(p) {
-  if (typeof p !== 'string' || !p.trim()) throw new Error('path is required')
-  if (!isAbsolute(p)) throw new Error(`path must be absolute: ${p}`)
-  // Block shell metacharacters in path — defense in depth even with execFileSync
-  if (/[;&|`$(){}!#]/.test(p)) throw new Error(`path contains forbidden characters: ${p}`)
-  return resolve(p)
-}
-
-function validateName(n) {
-  if (typeof n !== 'string' || !n.trim()) throw new Error('name is required')
-  // MCP server names: alphanumeric, dash, underscore only
-  if (!/^[a-zA-Z0-9_-]+$/.test(n)) throw new Error(`name must be alphanumeric/dash/underscore only: ${n}`)
-  return n
-}
-
-function validateCommand(c) {
-  if (typeof c !== 'string' || !c.trim()) throw new Error('command is required')
-  // Command: alphanumeric, dash, underscore, dot, slash only
-  if (!/^[a-zA-Z0-9_./-]+$/.test(c)) throw new Error(`command contains forbidden characters: ${c}`)
-  return c
-}
-
-function validateArgs(args) {
-  if (!args) return []
-  if (!Array.isArray(args)) throw new Error('args must be an array')
-  return args.map((a, i) => {
-    if (typeof a !== 'string') throw new Error(`args[${i}] must be a string`)
-    // Block shell metacharacters in args
-    if (/[;&|`$(){}!#]/.test(a)) throw new Error(`args[${i}] contains forbidden characters: ${a}`)
-    return a
-  })
-}
 
 // --- Helpers ---
 
@@ -58,7 +26,7 @@ function findProjectRoot(startPath) {
   return null
 }
 
-// --- Tool implementations ---
+// --- Core tool implementations ---
 
 function runTests(rawPath) {
   const path = validatePath(rawPath)
@@ -83,11 +51,9 @@ function registerMcp({ name: rawName, command: rawCmd, args: rawArgs, cwd: rawCw
   if (rawCwd) serverDef.cwd = validatePath(rawCwd)
   let log = ''
 
-  // Validate scope
   const validScopes = ['user', 'local', 'project']
   const s = validScopes.includes(scope) ? scope : 'user'
 
-  // 1. Write to Claude Desktop config
   const desktopConfigPath = join(process.env.HOME || '', 'Library/Application Support/Claude/claude_desktop_config.json')
   try {
     const raw = existsSync(desktopConfigPath) ? readFileSync(desktopConfigPath, 'utf-8') : '{}'
@@ -100,7 +66,6 @@ function registerMcp({ name: rawName, command: rawCmd, args: rawArgs, cwd: rawCw
     log += `Desktop config write failed: ${e.message}\n`
   }
 
-  // 2. CLI config — using execFileSync (no shell injection)
   const cliConfig = { type: 'stdio', ...serverDef }
   try {
     try { execFileSync('claude', ['mcp', 'remove', name, '-s', s], { encoding: 'utf-8', timeout: 10_000 }) } catch {}
@@ -115,17 +80,54 @@ function registerMcp({ name: rawName, command: rawCmd, args: rawArgs, cwd: rawCw
 }
 
 function restartDesktop() {
+  if (process.env.VITEST) {
+    return { isError: false, text: '[TEST MODE] restart_desktop skipped — running inside vitest.' }
+  }
+
   try {
-    try { execFileSync('pkill', ['-x', 'Claude'], { timeout: 5000 }) } catch {}
-    execSync('sleep 2', { timeout: 5000 })
-    execFileSync('open', ['-a', 'Claude'], { timeout: 5000 })
-    return { isError: false, text: 'Claude Desktop killed and relaunched. Start a new conversation.' }
+    // Write restart script to a secure temp directory (not world-writable /tmp).
+    // mkdtempSync creates a unique dir owned by the current user, preventing
+    // race condition where another process replaces the script before execution.
+    const tmpDir = mkdtempSync(join(tmpdir(), 'devmcp-restart-'))
+    const script = join(tmpDir, 'restart.sh')
+    writeFileSync(script, [
+      '#!/bin/bash',
+      'sleep 1',
+      'osascript -e \'quit app "Claude"\' 2>/dev/null',
+      'sleep 2',
+      'killall -9 Claude 2>/dev/null',
+      'killall -9 "Claude Helper" 2>/dev/null',
+      'killall -9 "Claude Helper (Renderer)" 2>/dev/null',
+      'killall -9 "Claude Helper (Plugin)" 2>/dev/null',
+      'sleep 1',
+      'open -a Claude',
+      `rm -rf "${tmpDir}"`,
+    ].join('\n') + '\n', { mode: 0o700 })
+    const child = spawn('bash', ['-c', `nohup ${script} &>/dev/null &`], {
+      detached: true,
+      stdio: 'ignore',
+    })
+    child.unref()
+    return { isError: false, text: 'Claude Desktop will restart in ~4s. Start a new conversation.' }
   } catch (e) {
     return { isError: true, text: `restart failed: ${e.message}` }
   }
 }
 
-// --- Tool catalogue ---
+function enableMcp(a) {
+  const reg = registerMcp(a)
+  if (reg.isError) return reg
+  const rst = restartDesktop()
+  return { isError: rst.isError, text: reg.text + '\n' + rst.text }
+}
+
+function selfTest() {
+  const testFile = join(__dirname, 'mcp-server.unit.test.js')
+  if (!existsSync(testFile)) return { isError: true, text: `Test file not found: ${testFile}` }
+  return runTests(testFile)
+}
+
+// --- Core tool catalogue ---
 
 const TOOLS = [
   {
@@ -176,25 +178,38 @@ const TOOLS = [
   },
 ]
 
-function enableMcp(a) {
-  const reg = registerMcp(a)
-  if (reg.isError) return reg
-  const rst = restartDesktop()
-  return { isError: rst.isError, text: reg.text + '\n' + rst.text }
-}
-
-function selfTest() {
-  const testFile = join(__dirname, 'mcp-server.unit.test.js')
-  if (!existsSync(testFile)) return { isError: true, text: `Test file not found: ${testFile}` }
-  return runTests(testFile)
-}
-
 const HANDLERS = {
   run_tests: (a) => runTests(a.path),
   register_mcp: (a) => registerMcp(a),
   restart_desktop: () => restartDesktop(),
   enable_mcp: (a) => enableMcp(a),
   self_test: () => selfTest(),
+}
+
+// --- Extension loader ---
+// Scans extensions/*/index.js at boot. Each extension exports a default array of
+// { name, description, inputSchema, handler } objects that merge into TOOLS + HANDLERS.
+
+const extensionsDir = join(__dirname, 'extensions')
+if (existsSync(extensionsDir)) {
+  for (const entry of readdirSync(extensionsDir)) {
+    const entryPath = join(extensionsDir, entry)
+    const extIndex = join(entryPath, 'index.js')
+    if (statSync(entryPath).isDirectory() && existsSync(extIndex)) {
+      try {
+        const mod = await import(pathToFileURL(extIndex).href)
+        const tools = mod.default || []
+        for (const tool of tools) {
+          if (tool.name && tool.handler && tool.inputSchema) {
+            TOOLS.push({ name: tool.name, description: tool.description || '', inputSchema: tool.inputSchema })
+            HANDLERS[tool.name] = tool.handler
+          }
+        }
+      } catch (e) {
+        process.stderr.write(`[devMCP] extension load failed: ${entry} — ${e.message}\n`)
+      }
+    }
+  }
 }
 
 // --- JSON-RPC stdio ---
@@ -212,7 +227,7 @@ function handleRequest({ id, method, params }) {
       respond(id, {
         protocolVersion: '2024-11-05',
         capabilities: { tools: {} },
-        serverInfo: { name: 'devMCP', version: '1.2.0' },
+        serverInfo: { name: 'devMCP', version: '1.6.0' },
       })
       break
     case 'notifications/initialized': break
