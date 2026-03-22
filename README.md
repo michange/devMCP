@@ -4,12 +4,14 @@ Bootstrap MCP server for Claude. Register once, available in every conversation 
 
 **Clients:** Claude Desktop (chat), Claude Desktop (code), Claude Code CLI.
 
-**Tools:**
+**Core tools (5):**
 - `run_tests` — Run vitest on any file or directory. Finds the project root automatically.
 - `self_test` — Run devMCP's own test suite. 10 tests, verifies all tools work.
 - `register_mcp` — Register a new stdio MCP server in both Desktop and CLI configs. Does not restart.
 - `restart_desktop` — Kill Claude Desktop and relaunch it. Full process tree cleanup.
 - `enable_mcp` — Register a new MCP server + restart in one shot. The tool you use to add other MCP servers (not devMCP tools — use extensions for that).
+
+Add your own tools via the `extensions/` folder — see [Extensions](#extensions).
 
 **The bootstrap problem:** Claude can't register MCP tools without already having a tool to do it. devMCP is the one you register by hand. After that, Claude registers everything else itself.
 
