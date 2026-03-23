@@ -6,7 +6,7 @@ Bootstrap MCP server for Claude. Register once, available in every conversation 
 
 **Core tools (5):**
 - `run_tests` — Run vitest on any file or directory. Finds the project root automatically.
-- `self_test` — Run devMCP's own test suite. 10 tests, verifies all tools work.
+- `self_test` — Run devMCP's own test suite. 11 tests, verifies all tools work.
 - `register_mcp` — Register a new stdio MCP server in both Desktop and CLI configs. Does not restart.
 - `restart_desktop` — Kill Claude Desktop and relaunch it. Full process tree cleanup.
 - `enable_mcp` — Register a new MCP server + restart in one shot. The tool you use to add other MCP servers (not devMCP tools — use extensions for that).
@@ -64,7 +64,7 @@ Then:
 
 **CLI:** `claude` → `/mcp` → devMCP connected.
 
-**Self-test:** ask Claude to call `self_test` → 10/10 green.
+**Self-test:** ask Claude to call `self_test` → 11/11 green.
 
 ## Autorun instructions
 
@@ -122,11 +122,33 @@ Extensions can import validators from core:
 import { validatePath, validateArgs } from '../../validators.js'
 ```
 
+### Extensions guide — absolute paths
+
+**Claude Desktop ignores `cwd` when spawning MCP servers.** Any script path in `args` must be absolute, or the server will fail to start.
+
+When registering an MCP server from an extension or asking Claude to call `register_mcp` / `enable_mcp`, always build the path using `__dirname`:
+
+```js
+// ✅ correct — absolute path resolved at registration time
+import { dirname, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const serverPath = resolve(join(__dirname, 'mcp-server.js'))
+// then pass: args: [serverPath]
+```
+
+```js
+// ❌ wrong — relative path, will fail in Claude Desktop
+// args: ['mcp-server.js']
+```
+
+If you pass a relative path-like arg to `register_mcp` or `enable_mcp`, devMCP will warn you in the response and still register — but the server will not start.
+
 ## Adding a new MCP server
 
 `enable_mcp` registers other MCP servers — separate from devMCP. Ask Claude:
 
-> "Register a new MCP server called my-server at /path/to/my-server.js"
+> "Register a new MCP server called my-server at /absolute/path/to/my-server.js"
 
 Claude calls `enable_mcp` → writes to both configs → restarts Desktop → new conversation has the server. New CLI session has it too.
 
@@ -151,7 +173,7 @@ Claude calls `enable_mcp` → writes to both configs → restarts Desktop → ne
 
 ```
 mcp-server.js              — the server (core + extension loader, zero runtime deps)
-mcp-server.unit.test.js    — 10 tests, real process spawn, sandboxed configs
+mcp-server.unit.test.js    — 11 tests, real process spawn, sandboxed configs
 validators.js              — shared input validation for core and extensions
 install.js                 — installer for Desktop + CLI (with verify)
 uninstall.js               — uninstaller for Desktop + CLI (with verify)

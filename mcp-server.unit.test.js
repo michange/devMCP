@@ -175,14 +175,14 @@ describe('register_mcp', () => {
     server.send(rpc('initialize', {}, 1))
     const res = await server.sendAndWait(rpc('tools/call', {
       name: 'register_mcp',
-      arguments: { name: 'test-srv', command: 'node', args: ['test.js'] },
+      arguments: { name: 'test-srv', command: 'node', args: ['/abs/path/test.js'] },
     }, 2))
     expect(res.result.content[0].text).toContain('Desktop config updated')
 
     // Verify the file was written
     const configPath = join(fakeHome, 'Library/Application Support/Claude/claude_desktop_config.json')
     const config = JSON.parse(readFileSync(configPath, 'utf-8'))
-    expect(config.mcpServers['test-srv']).toEqual({ command: 'node', args: ['test.js'] })
+    expect(config.mcpServers['test-srv']).toEqual({ command: 'node', args: ['/abs/path/test.js'] })
     // existing server preserved
     expect(config.mcpServers['existing']).toEqual({ command: 'node', args: ['existing.js'] })
   })
@@ -190,14 +190,29 @@ describe('register_mcp', () => {
   it('adds cwd when provided', async () => {
     server = spawnServer({ HOME: fakeHome })
     server.send(rpc('initialize', {}, 1))
-    const res = await server.sendAndWait(rpc('tools/call', {
+    await server.sendAndWait(rpc('tools/call', {
       name: 'register_mcp',
-      arguments: { name: 'with-cwd', command: 'node', args: ['srv.js'], cwd: '/tmp/mydir' },
+      arguments: { name: 'with-cwd', command: 'node', args: ['/abs/srv.js'], cwd: '/tmp/mydir' },
     }, 2))
 
     const configPath = join(fakeHome, 'Library/Application Support/Claude/claude_desktop_config.json')
     const config = JSON.parse(readFileSync(configPath, 'utf-8'))
     expect(config.mcpServers['with-cwd'].cwd).toBe('/tmp/mydir')
+  })
+
+  it('warns on relative path-like args', async () => {
+    server = spawnServer({ HOME: fakeHome })
+    server.send(rpc('initialize', {}, 1))
+    const res = await server.sendAndWait(rpc('tools/call', {
+      name: 'register_mcp',
+      arguments: { name: 'rel-srv', command: 'node', args: ['mcp-server.js'], cwd: '/some/dir' },
+    }, 2))
+    const text = res.result.content[0].text
+    expect(text).toContain('⚠️')
+    expect(text).toContain('mcp-server.js')
+    expect(text).toContain('README.md')
+    // Still registers despite warning
+    expect(text).toContain('Desktop config updated')
   })
 })
 
@@ -238,12 +253,12 @@ describe('enable_mcp', () => {
     server.send(rpc('initialize', {}, 1))
     const res = await server.sendAndWait(rpc('tools/call', {
       name: 'enable_mcp',
-      arguments: { name: 'new-srv', command: 'node', args: ['new.js'] },
+      arguments: { name: 'new-srv', command: 'node', args: ['/abs/new.js'] },
     }, 2))
     const text = res.result.content[0].text
     expect(text).toContain('Desktop config updated')
     const configPath = join(fakeHome, 'Library/Application Support/Claude/claude_desktop_config.json')
     const config = JSON.parse(readFileSync(configPath, 'utf-8'))
-    expect(config.mcpServers['new-srv']).toEqual({ command: 'node', args: ['new.js'] })
+    expect(config.mcpServers['new-srv']).toEqual({ command: 'node', args: ['/abs/new.js'] })
   })
 })

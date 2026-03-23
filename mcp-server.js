@@ -51,6 +51,14 @@ function registerMcp({ name: rawName, command: rawCmd, args: rawArgs, cwd: rawCw
   if (rawCwd) serverDef.cwd = validatePath(rawCwd)
   let log = ''
 
+  // Warn on relative path-like args — Claude Desktop ignores cwd, these will likely fail.
+  const relativePaths = args.filter(
+    a => !a.startsWith('-') && /\.(js|mjs|cjs|json)$/.test(a) && !isAbsolute(a)
+  )
+  if (relativePaths.length) {
+    log += `⚠️  Warning: relative path args detected: ${relativePaths.join(', ')} — Claude Desktop ignores cwd, these will likely fail. Use absolute paths. Check extensions guide in README.md.\n`
+  }
+
   const validScopes = ['user', 'local', 'project']
   const s = validScopes.includes(scope) ? scope : 'user'
 
@@ -146,7 +154,7 @@ const TOOLS = [
       properties: {
         name: { type: 'string', description: 'Server name — alphanumeric, dash, underscore only' },
         command: { type: 'string', description: 'Command to run (e.g. "node")' },
-        args: { type: 'array', items: { type: 'string' }, description: 'Command arguments (e.g. ["mcp-server.js"])' },
+        args: { type: 'array', items: { type: 'string' }, description: 'Command arguments. Script paths must be absolute (e.g. ["/abs/path/mcp-server.js"]) — Claude Desktop ignores cwd. See extensions guide in README.md.' },
         cwd: { type: 'string', description: 'Working directory (absolute path)' },
         scope: { type: 'string', enum: ['user', 'local', 'project'], description: 'Config scope (default: user)' },
       },
@@ -170,7 +178,7 @@ const TOOLS = [
       properties: {
         name: { type: 'string', description: 'Server name — alphanumeric, dash, underscore only' },
         command: { type: 'string', description: 'Command to run (e.g. "node")' },
-        args: { type: 'array', items: { type: 'string' }, description: 'Command arguments' },
+        args: { type: 'array', items: { type: 'string' }, description: 'Command arguments. Script paths must be absolute (e.g. ["/abs/path/mcp-server.js"]) — Claude Desktop ignores cwd. See extensions guide in README.md.' },
         cwd: { type: 'string', description: 'Working directory (absolute path)' },
         scope: { type: 'string', enum: ['user', 'local', 'project'], description: 'Config scope (default: user)' },
       },
@@ -227,7 +235,7 @@ function handleRequest({ id, method, params }) {
       respond(id, {
         protocolVersion: '2024-11-05',
         capabilities: { tools: {} },
-        serverInfo: { name: 'devMCP', version: '1.6.0' },
+        serverInfo: { name: 'devMCP', version: '1.7.0' },
       })
       break
     case 'notifications/initialized': break
