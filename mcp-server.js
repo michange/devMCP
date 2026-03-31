@@ -28,12 +28,14 @@ function findProjectRoot(startPath) {
 
 // --- Core tool implementations ---
 
-function runTests(rawPath) {
+function runTests(rawPath, pattern) {
   const path = validatePath(rawPath)
   const root = findProjectRoot(path)
   if (!root) return { isError: true, text: `No project root found for ${path}` }
   try {
-    const output = execFileSync('npx', ['vitest', 'run', path, '--reporter=verbose'], {
+    const args = ['vitest', 'run', path, '--reporter=verbose']
+    if (pattern) args.push('-t', pattern)
+    const output = execFileSync('npx', args, {
       cwd: root, encoding: 'utf-8', timeout: 120_000,
       env: { ...process.env, FORCE_COLOR: '0' },
     })
@@ -143,7 +145,10 @@ const TOOLS = [
     description: 'Run vitest on a test file or directory. Returns stdout + stderr. Timeout 120s.',
     inputSchema: {
       type: 'object', required: ['path'],
-      properties: { path: { type: 'string', description: 'Absolute path to .test.js file or directory' } },
+      properties: {
+        path:    { type: 'string', description: 'Absolute path to .test.js file or directory' },
+        pattern: { type: 'string', description: 'Optional test name pattern — passed as -t to vitest. Matches test names by substring or regex.' },
+      },
     },
   },
   {
@@ -187,7 +192,7 @@ const TOOLS = [
 ]
 
 const HANDLERS = {
-  run_tests: (a) => runTests(a.path),
+  run_tests: (a) => runTests(a.path, a.pattern),
   register_mcp: (a) => registerMcp(a),
   restart_desktop: () => restartDesktop(),
   enable_mcp: (a) => enableMcp(a),
@@ -209,6 +214,10 @@ if (existsSync(extensionsDir)) {
         const tools = mod.default || []
         for (const tool of tools) {
           if (tool.name && tool.handler && tool.inputSchema) {
+            try { validateName(tool.name) } catch (e) {
+              process.stderr.write(`[devMCP] extension "${entry}" bad tool name "${tool.name}": ${e.message}\n`)
+              continue
+            }
             TOOLS.push({ name: tool.name, description: tool.description || '', inputSchema: tool.inputSchema })
             HANDLERS[tool.name] = tool.handler
           }
@@ -235,7 +244,7 @@ function handleRequest({ id, method, params }) {
       respond(id, {
         protocolVersion: '2024-11-05',
         capabilities: { tools: {} },
-        serverInfo: { name: 'devMCP', version: '1.7.0' },
+        serverInfo: { name: 'devMCP', version: '1.7.1' },
       })
       break
     case 'notifications/initialized': break
