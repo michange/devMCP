@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // mcp-server.js — Dev tooling MCP server (stdio)
 // Persistent across sessions. Configured in Claude Desktop with --scope user.
-// Core tools: run_tests, register_mcp, restart_desktop, self_test, enable_mcp
+// Core tools: run_tests, run_tests_one_by_one, register_mcp, restart_desktop, self_test, enable_mcp
 // Extensions loaded dynamically from extensions/*/index.js at boot.
 
 import readline from 'node:readline'
@@ -26,6 +26,19 @@ function findProjectRoot(startPath) {
   return null
 }
 
+function escapeRegex(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function extractTestNames(filePath) {
+  const content = readFileSync(filePath, 'utf-8')
+  const names = []
+  const regex = /\bit\(\s*['"`]([^'"`]+)['"`]/g
+  let m
+  while ((m = regex.exec(content))) names.push(m[1])
+  return names
+}
+
 // --- Core tool implementations ---
 
 function runTests(rawPath, pattern) {
@@ -45,6 +58,34 @@ function runTests(rawPath, pattern) {
   }
 }
 
+function runTestsOneByOne(rawPath, rank = 0) {
+  const path = validatePath(rawPath)
+  const root = findProjectRoot(path)
+  if (!root) return { isError: true, text: `No project root found for ${path}` }
+
+  const testNames = extractTestNames(path)
+  if (!testNames.length) return { isError: true, text: 'No it() test cases found in file' }
+
+  const idx = typeof rank === 'number' ? rank : 0
+  if (idx < 0 || idx >= testNames.length) {
+    return { isError: true, text: `rank ${idx} out of range — file has ${testNames.length} tests (0..${testNames.length - 1})` }
+  }
+
+  const name = testNames[idx]
+  const escaped = escapeRegex(name)
+  try {
+    const args = ['vitest', 'run', path, '--reporter=verbose', '--bail', '1', '-t', escaped]
+    const output = execFileSync('npx', args, {
+      cwd: root, encoding: 'utf-8', timeout: 120_000,
+      env: { ...process.env, FORCE_COLOR: '0' },
+    })
+    return { isError: false, text: `[${idx + 1}/${testNames.length}] ${name}::PASS` }
+  } catch (e) {
+    const output = (e.stdout || '') + '\n' + (e.stderr || '')
+    return { isError: false, text: `[${idx + 1}/${testNames.length}] ${name}::FAIL\n\n${output.trim()}\nexit code: ${e.status}` }
+  }
+}
+
 function registerMcp({ name: rawName, command: rawCmd, args: rawArgs, cwd: rawCwd, scope }) {
   const name = validateName(rawName)
   const command = validateCommand(rawCmd)
@@ -53,12 +94,11 @@ function registerMcp({ name: rawName, command: rawCmd, args: rawArgs, cwd: rawCw
   if (rawCwd) serverDef.cwd = validatePath(rawCwd)
   let log = ''
 
-  // Warn on relative path-like args — Claude Desktop ignores cwd, these will likely fail.
   const relativePaths = args.filter(
     a => !a.startsWith('-') && /\.(js|mjs|cjs|json)$/.test(a) && !isAbsolute(a)
   )
   if (relativePaths.length) {
-    log += `⚠️  Warning: relative path args detected: ${relativePaths.join(', ')} — Claude Desktop ignores cwd, these will likely fail. Use absolute paths. Check extensions guide in README.md.\n`
+    log += `Warning: relative path args detected: ${relativePaths.join(', ')} — Claude Desktop ignores cwd, these will likely fail. Use absolute paths.\n`
   }
 
   const validScopes = ['user', 'local', 'project']
@@ -95,9 +135,6 @@ function restartDesktop() {
   }
 
   try {
-    // Write restart script to a secure temp directory (not world-writable /tmp).
-    // mkdtempSync creates a unique dir owned by the current user, preventing
-    // race condition where another process replaces the script before execution.
     const tmpDir = mkdtempSync(join(tmpdir(), 'devmcp-restart-'))
     const script = join(tmpDir, 'restart.sh')
     writeFileSync(script, [
@@ -152,6 +189,17 @@ const TOOLS = [
     },
   },
   {
+    name: 'run_tests_one_by_one',
+    description: 'Run a single test from a file by rank (0-indexed). Extracts it() names, runs the Nth one in isolation. Returns [rank/total] name::PASS or name::FAIL with output. Claude calls this in a loop, reporting after each, stopping at first FAIL.',
+    inputSchema: {
+      type: 'object', required: ['path'],
+      properties: {
+        path: { type: 'string', description: 'Absolute path to .test.js file' },
+        rank: { type: 'integer', description: 'Which test to run (0-indexed, default 0 = first test)', default: 0 },
+      },
+    },
+  },
+  {
     name: 'register_mcp',
     description: 'Register a new stdio MCP server in Claude Desktop config. Does NOT restart — use enable_mcp if you want register + restart in one shot.',
     inputSchema: {
@@ -193,6 +241,7 @@ const TOOLS = [
 
 const HANDLERS = {
   run_tests: (a) => runTests(a.path, a.pattern),
+  run_tests_one_by_one: (a) => runTestsOneByOne(a.path, a.rank),
   register_mcp: (a) => registerMcp(a),
   restart_desktop: () => restartDesktop(),
   enable_mcp: (a) => enableMcp(a),
@@ -200,9 +249,6 @@ const HANDLERS = {
 }
 
 // --- Extension loader ---
-// Scans extensions/*/index.js at boot. Each extension exports a default array of
-// { name, description, inputSchema, handler } objects that merge into TOOLS + HANDLERS.
-
 const extensionsDir = join(__dirname, 'extensions')
 if (existsSync(extensionsDir)) {
   for (const entry of readdirSync(extensionsDir)) {
@@ -244,7 +290,7 @@ function handleRequest({ id, method, params }) {
       respond(id, {
         protocolVersion: '2024-11-05',
         capabilities: { tools: {} },
-        serverInfo: { name: 'devMCP', version: '1.7.1' },
+        serverInfo: { name: 'devMCP', version: '1.8.0' },
       })
       break
     case 'notifications/initialized': break
