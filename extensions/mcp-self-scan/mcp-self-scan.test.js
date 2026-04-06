@@ -58,31 +58,43 @@ describe('comparison: mcp_list vs mcp_self_scan', () => {
     const scanNames = Object.keys(scanResult.servers).sort()
     const listNames = Object.keys(listResult.servers).sort()
 
-    // mcp_list may have more (project-level poc-url) since self_scan
-    // only shows servers for current context
     for (const name of scanNames) {
       expect(listNames, `${name} found by self_scan but not by mcp_list`).toContain(name)
     }
   }, 60_000)
 
   it('file-based mcp_list is faster than preflight mcp_self_scan', () => {
-    // mcp_list (file read)
-    const t0 = Date.now()
-    listTool.handler({ projectRoot: '/Users/mic/PhpstormProjects/naude-new' })
-    const listMs = Date.now() - t0
+    const PROJECT = '/Users/mic/PhpstormProjects/naude-new'
+    const ITERATIONS = 50
 
-    // mcp_self_scan (CLI spawn)
-    const t1 = Date.now()
-    scanTool.handler({})
-    const scanMs = Date.now() - t1
+    // mcp_list: run N iterations, measure total with performance.now
+    const t0 = performance.now()
+    for (let i = 0; i < ITERATIONS; i++) {
+      listTool.handler({ projectRoot: PROJECT })
+    }
+    const listTotalMs = performance.now() - t0
+    const listAvgMs = listTotalMs / ITERATIONS
 
-    console.log(`mcp_list: ${listMs}ms | mcp_self_scan: ${scanMs}ms | ratio: ${(scanMs / Math.max(listMs, 1)).toFixed(1)}x`)
+    // mcp_self_scan: run 3 iterations (it's slow — spawns a process each time)
+    const SCAN_ITERATIONS = 3
+    const t1 = performance.now()
+    for (let i = 0; i < SCAN_ITERATIONS; i++) {
+      scanTool.handler({})
+    }
+    const scanTotalMs = performance.now() - t1
+    const scanAvgMs = scanTotalMs / SCAN_ITERATIONS
 
-    // file-based should be at least 10x faster
-    expect(listMs).toBeLessThan(scanMs)
+    const ratio = scanAvgMs / listAvgMs
+
+    console.log(`mcp_list: ${listAvgMs.toFixed(2)}ms avg over ${ITERATIONS} runs`)
+    console.log(`mcp_self_scan: ${scanAvgMs.toFixed(2)}ms avg over ${SCAN_ITERATIONS} runs`)
+    console.log(`ratio: ${ratio.toFixed(1)}x`)
+
+    expect(listAvgMs).toBeLessThan(scanAvgMs)
+    expect(ratio).toBeGreaterThan(10)  // file-based should be at least 10x faster
   }, 60_000)
 
-  it('mcp_list has richer config info (command, args, type)', () => {
+  it('mcp_list has richer config info: command, args, type, _source', () => {
     const listResult = JSON.parse(listTool.handler({}).text)
     const devMCP = listResult.servers.devMCP
     expect(devMCP.command).toBe('node')
@@ -95,7 +107,7 @@ describe('comparison: mcp_list vs mcp_self_scan', () => {
     const scanResult = JSON.parse(scanTool.handler({}).text)
     const devMCP = scanResult.servers.devMCP
     expect(devMCP.transport).toContain('node')
-    expect(devMCP.command).toBeUndefined()  // no structured config
+    expect(devMCP.command).toBeUndefined()
     expect(devMCP.args).toBeUndefined()
   }, 60_000)
 

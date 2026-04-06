@@ -9,6 +9,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
+import { performance } from 'node:perf_hooks'
 
 function readJson(path) {
   try {
@@ -19,6 +20,7 @@ function readJson(path) {
 }
 
 function mcpList({ projectRoot }) {
+  const t0 = performance.now()
   const home = homedir()
   const globalConfigPath     = join(home, '.claude.json')
   const globalMcpPath        = join(home, '.claude', 'mcp.json')
@@ -67,7 +69,14 @@ function mcpList({ projectRoot }) {
     }
   }
 
-  const count = Object.keys(result.servers).length
+  const elapsed = performance.now() - t0
+
+  result._meta = {
+    method: 'file-based',
+    elapsedMs: Math.round(elapsed * 100) / 100,  // 2 decimal places
+    filesRead: [globalConfigPath, globalMcpPath, projectMcpPath].filter(Boolean).length + 1,
+  }
+
   return {
     isError: false,
     text: JSON.stringify(result, null, 2),
