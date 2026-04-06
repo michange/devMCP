@@ -2,6 +2,7 @@
 import { describe, it, expect } from 'vitest'
 import mcpSelfScanExt from './index.js'
 import mcpListExt from '../mcp-list/index.js'
+import { performance } from 'node:perf_hooks'
 
 const scanTool = mcpSelfScanExt[0]
 const listTool = mcpListExt[0]
@@ -63,35 +64,43 @@ describe('comparison: mcp_list vs mcp_self_scan', () => {
     }
   }, 60_000)
 
-  it('file-based mcp_list is faster than preflight mcp_self_scan', () => {
+  it('perf: mcp_list cached vs noCache vs mcp_self_scan', () => {
     const PROJECT = '/Users/mic/PhpstormProjects/naude-new'
     const ITERATIONS = 50
+    const SCAN_ITERATIONS = 3
 
-    // mcp_list: run N iterations, measure total with performance.now
+    // mcp_list cached (warm — files in page cache, Node module warm)
     const t0 = performance.now()
     for (let i = 0; i < ITERATIONS; i++) {
       listTool.handler({ projectRoot: PROJECT })
     }
-    const listTotalMs = performance.now() - t0
-    const listAvgMs = listTotalMs / ITERATIONS
+    const cachedAvg = (performance.now() - t0) / ITERATIONS
 
-    // mcp_self_scan: run 3 iterations (it's slow — spawns a process each time)
-    const SCAN_ITERATIONS = 3
+    // mcp_list noCache (raw fd read — still page cache but no Node stream reuse)
     const t1 = performance.now()
+    for (let i = 0; i < ITERATIONS; i++) {
+      listTool.handler({ projectRoot: PROJECT, noCache: true })
+    }
+    const noCacheAvg = (performance.now() - t1) / ITERATIONS
+
+    // mcp_self_scan (CLI spawn each time)
+    const t2 = performance.now()
     for (let i = 0; i < SCAN_ITERATIONS; i++) {
       scanTool.handler({})
     }
-    const scanTotalMs = performance.now() - t1
-    const scanAvgMs = scanTotalMs / SCAN_ITERATIONS
+    const scanAvg = (performance.now() - t2) / SCAN_ITERATIONS
 
-    const ratio = scanAvgMs / listAvgMs
+    console.log('--- PERF COMPARISON ---')
+    console.log(`mcp_list cached:   ${cachedAvg.toFixed(2)}ms avg over ${ITERATIONS} runs`)
+    console.log(`mcp_list noCache:  ${noCacheAvg.toFixed(2)}ms avg over ${ITERATIONS} runs`)
+    console.log(`mcp_self_scan:     ${scanAvg.toFixed(2)}ms avg over ${SCAN_ITERATIONS} runs`)
+    console.log(`ratio cached/scan: ${(scanAvg / cachedAvg).toFixed(1)}x`)
+    console.log(`ratio noCache/scan: ${(scanAvg / noCacheAvg).toFixed(1)}x`)
+    console.log('-----------------------')
 
-    console.log(`mcp_list: ${listAvgMs.toFixed(2)}ms avg over ${ITERATIONS} runs`)
-    console.log(`mcp_self_scan: ${scanAvgMs.toFixed(2)}ms avg over ${SCAN_ITERATIONS} runs`)
-    console.log(`ratio: ${ratio.toFixed(1)}x`)
-
-    expect(listAvgMs).toBeLessThan(scanAvgMs)
-    expect(ratio).toBeGreaterThan(10)  // file-based should be at least 10x faster
+    expect(cachedAvg).toBeLessThan(scanAvg)
+    expect(noCacheAvg).toBeLessThan(scanAvg)
+    expect(scanAvg / noCacheAvg).toBeGreaterThan(10)
   }, 60_000)
 
   it('mcp_list has richer config info: command, args, type, _source', () => {
