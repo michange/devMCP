@@ -39,26 +39,57 @@ function extractTestNames(filePath) {
   return names
 }
 
+/**
+ * Run a command in its own process group. On timeout, kill(-pid) kills the
+ * entire group — npx, vitest, AND child processes like Chrome/Playwright.
+ * This prevents orphan Chrome processes after timeout.
+ */
+function runInProcessGroup(cmd, args, { cwd, env, timeout = 120_000 }) {
+  return new Promise((resolve) => {
+    const child = spawn(cmd, args, {
+      cwd, env,
+      detached: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+
+    let stdout = '', stderr = ''
+    child.stdout.on('data', d => { stdout += d })
+    child.stderr.on('data', d => { stderr += d })
+
+    let timedOut = false
+    const timer = setTimeout(() => {
+      timedOut = true
+      try { process.kill(-child.pid, 'SIGTERM') } catch {}
+    }, timeout)
+
+    child.on('close', (code) => {
+      clearTimeout(timer)
+      resolve({ stdout, stderr, status: code, timedOut })
+    })
+  })
+}
+
 // --- Core tool implementations ---
 
-function runTests(rawPath, pattern) {
+async function runTests(rawPath, pattern) {
   const path = validatePath(rawPath)
   const root = findProjectRoot(path)
   if (!root) return { isError: true, text: `No project root found for ${path}` }
-  try {
-    const args = ['vitest', 'run', path, '--reporter=verbose']
-    if (pattern) args.push('-t', pattern)
-    const output = execFileSync('npx', args, {
-      cwd: root, encoding: 'utf-8', timeout: 120_000,
-      env: { ...process.env, FORCE_COLOR: '0' },
-    })
-    return { isError: false, text: output }
-  } catch (e) {
-    return { isError: false, text: (e.stdout || '') + '\n' + (e.stderr || '') + `\nexit code: ${e.status}` }
-  }
+
+  const args = ['vitest', 'run', path, '--reporter=verbose']
+  if (pattern) args.push('-t', pattern)
+
+  const { stdout, stderr, status, timedOut } = await runInProcessGroup('npx', args, {
+    cwd: root, timeout: 120_000,
+    env: { ...process.env, FORCE_COLOR: '0' },
+  })
+
+  const output = (stdout + '\n' + stderr).trim()
+  if (timedOut) return { isError: true, text: output + '\n\nTIMEOUT — process group killed' }
+  return { isError: false, text: output + (status ? `\nexit code: ${status}` : '') }
 }
 
-function runTestsOneByOne(rawPath, rank = 0) {
+async function runTestsOneByOne(rawPath, rank = 0) {
   const path = validatePath(rawPath)
   const root = findProjectRoot(path)
   if (!root) return { isError: true, text: `No project root found for ${path}` }
@@ -73,17 +104,21 @@ function runTestsOneByOne(rawPath, rank = 0) {
 
   const name = testNames[idx]
   const escaped = escapeRegex(name)
-  try {
-    const args = ['vitest', 'run', path, '--reporter=verbose', '--bail', '1', '-t', escaped]
-    const output = execFileSync('npx', args, {
-      cwd: root, encoding: 'utf-8', timeout: 120_000,
-      env: { ...process.env, FORCE_COLOR: '0' },
-    })
-    return { isError: false, text: `[${idx + 1}/${testNames.length}] ${name}::PASS` }
-  } catch (e) {
-    const output = (e.stdout || '') + '\n' + (e.stderr || '')
-    return { isError: false, text: `[${idx + 1}/${testNames.length}] ${name}::FAIL\n\n${output.trim()}\nexit code: ${e.status}` }
+  const args = ['vitest', 'run', path, '--reporter=verbose', '--bail', '1', '-t', escaped]
+
+  const { stdout, stderr, status, timedOut } = await runInProcessGroup('npx', args, {
+    cwd: root, timeout: 120_000,
+    env: { ...process.env, FORCE_COLOR: '0' },
+  })
+
+  if (timedOut) {
+    return { isError: true, text: `[${idx + 1}/${testNames.length}] ${name}::TIMEOUT\n\nProcess group killed` }
   }
+  if (status === 0) {
+    return { isError: false, text: `[${idx + 1}/${testNames.length}] ${name}::PASS` }
+  }
+  const output = (stdout + '\n' + stderr).trim()
+  return { isError: false, text: `[${idx + 1}/${testNames.length}] ${name}::FAIL\n\n${output}\nexit code: ${status}` }
 }
 
 function registerMcp({ name: rawName, command: rawCmd, args: rawArgs, cwd: rawCwd, scope }) {
@@ -168,7 +203,7 @@ function enableMcp(a) {
   return { isError: rst.isError, text: reg.text + '\n' + rst.text }
 }
 
-function selfTest() {
+async function selfTest() {
   const testFile = join(__dirname, 'mcp-server.unit.test.js')
   if (!existsSync(testFile)) return { isError: true, text: `Test file not found: ${testFile}` }
   return runTests(testFile)
@@ -179,7 +214,7 @@ function selfTest() {
 const TOOLS = [
   {
     name: 'run_tests',
-    description: 'Run vitest on a test file or directory. Returns stdout + stderr. Timeout 120s.',
+    description: 'Run vitest on a test file or directory. Returns stdout + stderr. Timeout 120s. Kills entire process group on timeout (no orphan Chrome).',
     inputSchema: {
       type: 'object', required: ['path'],
       properties: {
@@ -190,7 +225,7 @@ const TOOLS = [
   },
   {
     name: 'run_tests_one_by_one',
-    description: 'Run a single test from a file by rank (0-indexed). Extracts it() names, runs the Nth one in isolation. Returns [rank/total] name::PASS or name::FAIL with output. Claude calls this in a loop, reporting after each, stopping at first FAIL.',
+    description: 'Run a single test from a file by rank (0-indexed). Extracts it() names, runs the Nth one in isolation. Returns [rank/total] name::PASS or name::FAIL with output. Claude calls this in a loop, reporting after each, stopping at first FAIL. Kills entire process group on timeout (no orphan Chrome).',
     inputSchema: {
       type: 'object', required: ['path'],
       properties: {
@@ -284,13 +319,13 @@ function respondError(id, code, message) {
   process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id, error: { code, message } }) + '\n')
 }
 
-function handleRequest({ id, method, params }) {
+async function handleRequest({ id, method, params }) {
   switch (method) {
     case 'initialize':
       respond(id, {
         protocolVersion: '2024-11-05',
         capabilities: { tools: {} },
-        serverInfo: { name: 'devMCP', version: '1.8.0' },
+        serverInfo: { name: 'devMCP', version: '1.9.0' },
       })
       break
     case 'notifications/initialized': break
@@ -301,7 +336,7 @@ function handleRequest({ id, method, params }) {
       const handler = HANDLERS[params?.name]
       if (!handler) { respondError(id, -32601, `Unknown tool: ${params?.name}`); break }
       try {
-        const result = handler(params?.arguments || {})
+        const result = await handler(params?.arguments || {})
         respond(id, { content: [{ type: 'text', text: result.text }], isError: result.isError || false })
       } catch (e) {
         respond(id, { content: [{ type: 'text', text: `Validation error: ${e.message}` }], isError: true })

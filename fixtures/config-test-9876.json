@@ -1,0 +1,5 @@
+{
+  "port": 9876,
+  "llmAdapter": "NullLLM",
+  "ourServerNames": ["naude"]
+}
