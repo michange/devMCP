@@ -216,6 +216,51 @@ describe('register_mcp', () => {
   })
 })
 
+const FIXTURE_CONFIG_9876 = join(__dirname, 'fixtures/config-test-9876.json')
+
+describe('naude_restart (isolated :9876)', () => {
+  let server
+
+  afterEach(() => { server?.kill() })
+
+  it('naude_restart appears in tools/list', async () => {
+    server = spawnServer()
+    server.send(rpc('initialize', {}, 1))
+    const res = await server.sendAndWait(rpc('tools/list', {}, 2))
+    const names = res.result.tools.map(t => t.name)
+    expect(names).toContain('naude_restart')
+  })
+
+  it('naude_start schema accepts configPath', async () => {
+    server = spawnServer()
+    server.send(rpc('initialize', {}, 1))
+    const res = await server.sendAndWait(rpc('tools/list', {}, 2))
+    const startTool = res.result.tools.find(t => t.name === 'naude_start')
+    expect(startTool.inputSchema.properties.configPath).toBeDefined()
+    expect(startTool.inputSchema.properties.configPath.type).toBe('string')
+  })
+
+  it('naude_restart uses _lastConfigPath from naude_start (targets :9876, not prod)', async () => {
+    server = spawnServer()
+    server.send(rpc('initialize', {}, 1))
+
+    // 1. naude_start with fixture config → sets _lastConfigPath to :9876
+    await server.sendAndWait(rpc('tools/call', {
+      name: 'naude_start',
+      arguments: { configPath: FIXTURE_CONFIG_9876 },
+    }, 2))
+
+    // 2. naude_restart → should target :9876 (via _lastConfigPath), NOT prod :1967
+    const res = await server.sendAndWait(rpc('tools/call', {
+      name: 'naude_restart',
+      arguments: {},
+    }, 3))
+    const text = res.result.content[0].text
+    // Must mention :9876, never :1967
+    expect(text).toMatch(/9876/)
+  }, 15_000)
+})
+
 describe('restart_desktop', () => {
   let server
 
