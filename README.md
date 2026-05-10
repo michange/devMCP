@@ -93,7 +93,44 @@ Where to put it depends on your client:
 
 For CLI, the project-level `CLAUDE.md` takes precedence. For Desktop, project instructions are injected into every conversation in that project.
 
-## Extensions
+## Configuration
+
+`devmcp.config.json` at devMCP root. Currently configures the write gate:
+
+```json
+{
+  "gate": {
+    "server": "http://localhost:3737",
+    "enabled": true
+  }
+}
+```
+
+- `gate.server` — URL of the web server hosting the approval page (must serve `/gate`, `/gate/respond`, `/gate/status`)
+- `gate.enabled` — `false` disables gating; all writes pass through silently
+
+Read fresh on every call — no restart needed.
+
+## Write gate
+
+`write_file` and `edit_file` are gated: each call opens a browser tab showing what's about to happen. You click Approve or Reject. This is a true side channel — Claude cannot see the page, click the button, or read the response.
+
+Before each gated write, a safety commit (`[devmcp-safety] before write`) is created in the target file's git repo, giving you a rollback point.
+
+See `extensions/gate/DESIGN.md` for architecture details and testing approach.
+
+## Built-in extensions
+
+These ship in `extensions/` and are loaded at boot alongside any custom extensions:
+
+| Extension | Tools | Gated |
+|---|---|---|
+| **fs** | `read_file`, `write_file`, `list_directory` | write_file only |
+| **edit-file** | `edit_file` | yes |
+| **bash** | `bash` (read-only: ls, find, cat, grep, jq, diff, etc.) | no |
+| **gate** | internal — provides `gate()` and `safetyCommit()` for other extensions | — |
+
+## Custom extensions
 
 devMCP loads extensions from `extensions/` at boot. Each subfolder exports additional tools that merge into the catalogue alongside core tools. This is how you add tools to devMCP.
 
