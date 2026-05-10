@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CONFIG_PATH = join(__dirname, 'devmcp.config.json');
 const GATE_PORT = 3939;
+const ORIG_CONFIG = '{"gate":{"server":"http://localhost:3737","enabled":true}}';
 const TEST_FILE = '/tmp/gate-test-file.txt';
 
 // ── Tiny gate server ────────────────────────────────────────────────
@@ -51,7 +52,7 @@ const gateOpts = (answerValue, delay = 100) => ({
 describe('gate()', () => {
 
   beforeAll(async () => { await startGateServer(); });
-  afterAll(() => { server?.close(); });
+  afterAll(() => { server?.close(); writeFileSync(CONFIG_PATH, ORIG_CONFIG); });
 
   beforeEach(() => {
     answers.clear();
@@ -109,7 +110,7 @@ describe('gate()', () => {
 describe('write_file with gate', () => {
 
   beforeAll(async () => { await startGateServer().catch(() => {}); });
-  afterAll(() => { server?.close(); try { unlinkSync(TEST_FILE); } catch {} });
+  afterAll(() => { server?.close(); try { unlinkSync(TEST_FILE); } catch {} writeFileSync(CONFIG_PATH, ORIG_CONFIG); });
   beforeEach(() => { answers.clear(); });
 
   it('writes file when gate approves', async () => {
@@ -146,7 +147,7 @@ describe('write_file with gate', () => {
 describe('edit_file with gate', () => {
 
   beforeAll(async () => { await startGateServer().catch(() => {}); });
-  afterAll(() => { server?.close(); try { unlinkSync(TEST_FILE); } catch {} });
+  afterAll(() => { server?.close(); try { unlinkSync(TEST_FILE); } catch {} writeFileSync(CONFIG_PATH, ORIG_CONFIG); });
   beforeEach(() => { answers.clear(); });
 
   it('edits file when gate approves', async () => {
