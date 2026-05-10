@@ -1,1 +1,1 @@
-{"gate":{"enabled":true,"server":"http://localhost:3939"}}
+{"gate":{"server":"http://localhost:3737","enabled":true}}
