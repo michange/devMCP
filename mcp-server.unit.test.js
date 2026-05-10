@@ -208,9 +208,9 @@ describe('register_mcp', () => {
       arguments: { name: 'rel-srv', command: 'node', args: ['mcp-server.js'], cwd: '/some/dir' },
     }, 2))
     const text = res.result.content[0].text
-    expect(text).toContain('⚠️')
+    expect(text).toContain('Warning')
     expect(text).toContain('mcp-server.js')
-    expect(text).toContain('README.md')
+    expect(text).toContain('relative path')
     // Still registers despite warning
     expect(text).toContain('Desktop config updated')
   })
