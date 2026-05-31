@@ -220,6 +220,7 @@ const TOOLS = [
       properties: {
         path:    { type: 'string', description: 'Absolute path to .test.js file or directory' },
         pattern: { type: 'string', description: 'Optional test name pattern — passed as -t to vitest. Matches test names by substring or regex.' },
+        env:     { type: 'object', description: 'Optional env vars merged into the test process (e.g. {"LIVE_API":"1"}). Caller keys override defaults; FORCE_COLOR=0 still applied.' },
       },
     },
   },
