@@ -71,7 +71,7 @@ function runInProcessGroup(cmd, args, { cwd, env, timeout = 120_000 }) {
 
 // --- Core tool implementations ---
 
-async function runTests(rawPath, pattern) {
+async function runTests(rawPath, pattern, env) {
   const path = validatePath(rawPath)
   const root = findProjectRoot(path)
   if (!root) return { isError: true, text: `No project root found for ${path}` }
@@ -81,7 +81,7 @@ async function runTests(rawPath, pattern) {
 
   const { stdout, stderr, status, timedOut } = await runInProcessGroup('npx', args, {
     cwd: root, timeout: 120_000,
-    env: { ...process.env, FORCE_COLOR: '0' },
+    env: { ...process.env, FORCE_COLOR: '0', ...env },
   })
 
   const output = (stdout + '\n' + stderr).trim()
