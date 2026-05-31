@@ -89,7 +89,7 @@ async function runTests(rawPath, pattern, env) {
   return { isError: false, text: output + (status ? `\nexit code: ${status}` : '') }
 }
 
-async function runTestsOneByOne(rawPath, rank = 0) {
+async function runTestsOneByOne(rawPath, rank = 0, env) {
   const path = validatePath(rawPath)
   const root = findProjectRoot(path)
   if (!root) return { isError: true, text: `No project root found for ${path}` }
@@ -108,7 +108,7 @@ async function runTestsOneByOne(rawPath, rank = 0) {
 
   const { stdout, stderr, status, timedOut } = await runInProcessGroup('npx', args, {
     cwd: root, timeout: 120_000,
-    env: { ...process.env, FORCE_COLOR: '0' },
+    env: { ...process.env, FORCE_COLOR: '0', ...env },
   })
 
   if (timedOut) {
