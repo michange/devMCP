@@ -151,6 +151,48 @@ describe('run_tests', () => {
   })
 })
 
+describe('run_tests env pass-through', () => {
+  let server
+  let tmpDir
+
+  beforeEach(() => {
+    tmpDir = join(__dirname, '.tmp-env-' + Date.now())
+    mkdirSync(tmpDir)
+    // Test asserts on a custom env var the runner must forward into the child.
+    writeFileSync(join(tmpDir, 'env.unit.test.js'), `
+      import { it, expect } from 'vitest'
+      it('sees forwarded env', () => { expect(process.env.DEVMCP_ENV_PROBE).toBe('on') })
+    `)
+  })
+
+  afterEach(() => {
+    server?.kill()
+    if (tmpDir && existsSync(tmpDir)) rmSync(tmpDir, { recursive: true, force: true })
+  })
+
+  it('run_tests forwards env into the test process', async () => {
+    server = spawnServer()
+    server.send(rpc('initialize', {}, 1))
+    const res = await server.sendAndWait(rpc('tools/call', {
+      name: 'run_tests',
+      arguments: { path: join(tmpDir, 'env.unit.test.js'), env: { DEVMCP_ENV_PROBE: 'on' } },
+    }, 2))
+    expect(res.result.isError).toBe(false)
+    expect(res.result.content[0].text).toContain('1 passed')
+  })
+
+  it('run_tests_one_by_one forwards env into the test process', async () => {
+    server = spawnServer()
+    server.send(rpc('initialize', {}, 1))
+    const res = await server.sendAndWait(rpc('tools/call', {
+      name: 'run_tests_one_by_one',
+      arguments: { path: join(tmpDir, 'env.unit.test.js'), rank: 0, env: { DEVMCP_ENV_PROBE: 'on' } },
+    }, 2))
+    expect(res.result.isError).toBe(false)
+    expect(res.result.content[0].text).toContain('::PASS')
+  })
+})
+
 describe('register_mcp', () => {
   let server
   let fakeHome
