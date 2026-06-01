@@ -324,7 +324,7 @@ const HANDLERS = {
   run_tests_one_by_one: (a) => runTestsOneByOne(a.path, a.rank, a.env),
   kill_stuck: (a) => killStuck(a.pattern),
   register_mcp: (a) => registerMcp(a),
-  restart_desktop: () => restartDesktop(),
+  restart_desktop: (a) => restartDesktop(a),
   enable_mcp: (a) => enableMcp(a),
   self_test: () => selfTest(),
 }
