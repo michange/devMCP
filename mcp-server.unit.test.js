@@ -349,3 +349,33 @@ describe('enable_mcp', () => {
     expect(config.mcpServers['new-srv']).toEqual({ command: 'node', args: ['/abs/new.js'] })
   })
 })
+
+describe('kill_stuck', () => {
+  let server
+  afterEach(() => { server?.kill() })
+
+  it('rejects a pattern not in the allowlist', async () => {
+    server = spawnServer()
+    server.send(rpc('initialize', {}, 1))
+    const res = await server.sendAndWait(rpc('tools/call', {
+      name: 'kill_stuck',
+      arguments: { pattern: 'rm -rf' },
+    }, 2))
+    expect(res.result.isError).toBe(true)
+    expect(res.result.content[0].text).toContain('not allowed')
+  })
+
+  it('returns success for an allowed pattern with no matching process', async () => {
+    // 'chromium' is allowlisted but not running during a pure unit test,
+    // so pkill exits 1 (no match) — must be treated as success, not error.
+    // NB: never test 'vitest' here — it would kill the running test runner.
+    server = spawnServer()
+    server.send(rpc('initialize', {}, 1))
+    const res = await server.sendAndWait(rpc('tools/call', {
+      name: 'kill_stuck',
+      arguments: { pattern: 'chromium' },
+    }, 2))
+    expect(res.result.isError).toBe(false)
+    expect(res.result.content[0].text).toMatch(/no processes matched|killed/)
+  })
+})
