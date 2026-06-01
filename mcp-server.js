@@ -71,6 +71,18 @@ function runInProcessGroup(cmd, args, { cwd, env, timeout = 120_000 }) {
 
 // --- Core tool implementations ---
 
+const KILL_ALLOWLIST = ['vitest', 'chromium', 'playwright']
+
+async function killStuck(pattern) {
+  if (!KILL_ALLOWLIST.includes(pattern)) {
+    return { isError: true, text: `pattern "${pattern}" not allowed. Allowed: ${KILL_ALLOWLIST.join(', ')}` }
+  }
+  const { status } = await runInProcessGroup('pkill', ['-f', pattern], { timeout: 5_000 })
+  if (status === 0) return { text: `killed processes matching "${pattern}"` }
+  if (status === 1) return { text: `no processes matched "${pattern}" (nothing to kill)` }
+  return { isError: true, text: `pkill failed for "${pattern}" (exit ${status})` }
+}
+
 async function runTests(rawPath, pattern, env) {
   const path = validatePath(rawPath)
   const root = findProjectRoot(path)
