@@ -317,6 +317,28 @@ describe('restart_desktop', () => {
     }, 2))
     expect(res.result.content[0].text).toBeTruthy()
   })
+
+  it('dryRun returns the restart script without executing it', async () => {
+    server = spawnServer()
+    server.send(rpc('initialize', {}, 1))
+    const res = await server.sendAndWait(rpc('tools/call', {
+      name: 'restart_desktop',
+      arguments: { dryRun: true },
+    }, 2))
+    const text = res.result.content[0].text
+    // The real kill/relaunch path is otherwise never exercised (VITEST stub).
+    // dryRun lets us assert the generated script's actual content.
+    expect(res.result.isError).toBe(false)
+    expect(text).toContain('quit app "Claude"')
+    expect(text).toContain('killall')
+    expect(text).toContain('open -a Claude')
+    // must clean up its own temp dir
+    expect(text).toMatch(/rm -rf .*devmcp-restart-/)
+    // race-fix: must wait long enough to flush the MCP response before quitting
+    const sleepBeforeQuit = text.match(/sleep (\d+)\s*\n\s*osascript/)
+    expect(sleepBeforeQuit).toBeTruthy()
+    expect(Number(sleepBeforeQuit[1])).toBeGreaterThanOrEqual(3)
+  })
 })
 
 describe('enable_mcp', () => {
