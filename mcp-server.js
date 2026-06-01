@@ -232,6 +232,7 @@ const TOOLS = [
       properties: {
         path: { type: 'string', description: 'Absolute path to .test.js file' },
         rank: { type: 'integer', description: 'Which test to run (0-indexed, default 0 = first test)', default: 0 },
+        env:  { type: 'object', description: 'Optional env vars merged into the test process (e.g. {"LIVE_API":"1"}). Caller keys override defaults; FORCE_COLOR=0 still applied.' },
       },
     },
   },
