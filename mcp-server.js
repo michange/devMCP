@@ -176,33 +176,54 @@ function registerMcp({ name: rawName, command: rawCmd, args: rawArgs, cwd: rawCw
   return { isError: false, text: log }
 }
 
-function restartDesktop() {
+function buildRestartScript(tmpDir) {
+  const script = join(tmpDir, 'restart.sh')
+  const log = join(tmpDir, 'restart.log')
+  const body = [
+    '#!/bin/bash',
+    // Race-fix: wait long enough for the MCP response to flush back through
+    // Claude Desktop BEFORE we quit it. Quitting too early (old sleep 1) killed
+    // the app mid-response → caller timed out instead of getting our reply.
+    `exec >> "${log}" 2>&1`,
+    'sleep 3',
+    'echo "[restart] quitting Claude"',
+    'osascript -e \'quit app "Claude"\'',
+    'sleep 2',
+    'killall -9 Claude 2>/dev/null',
+    'killall -9 "Claude Helper" 2>/dev/null',
+    'killall -9 "Claude Helper (Renderer)" 2>/dev/null',
+    'killall -9 "Claude Helper (Plugin)" 2>/dev/null',
+    'sleep 1',
+    'echo "[restart] relaunching Claude"',
+    'open -a Claude',
+    `rm -rf "${tmpDir}"`,
+  ].join('\n') + '\n'
+  return { script, body }
+}
+
+function restartDesktop(opts = {}) {
+  // dryRun returns the generated script WITHOUT executing — this is the only
+  // way to exercise/verify the real path under test (VITEST stub below masks it).
+  if (opts.dryRun) {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'devmcp-restart-'))
+    const { body } = buildRestartScript(tmpDir)
+    return { isError: false, text: body }
+  }
+
   if (process.env.VITEST) {
     return { isError: false, text: '[TEST MODE] restart_desktop skipped — running inside vitest.' }
   }
 
   try {
     const tmpDir = mkdtempSync(join(tmpdir(), 'devmcp-restart-'))
-    const script = join(tmpDir, 'restart.sh')
-    writeFileSync(script, [
-      '#!/bin/bash',
-      'sleep 1',
-      'osascript -e \'quit app "Claude"\' 2>/dev/null',
-      'sleep 2',
-      'killall -9 Claude 2>/dev/null',
-      'killall -9 "Claude Helper" 2>/dev/null',
-      'killall -9 "Claude Helper (Renderer)" 2>/dev/null',
-      'killall -9 "Claude Helper (Plugin)" 2>/dev/null',
-      'sleep 1',
-      'open -a Claude',
-      `rm -rf "${tmpDir}"`,
-    ].join('\n') + '\n', { mode: 0o700 })
+    const { script, body } = buildRestartScript(tmpDir)
+    writeFileSync(script, body, { mode: 0o700 })
     const child = spawn('bash', ['-c', `nohup ${script} &>/dev/null &`], {
       detached: true,
       stdio: 'ignore',
     })
     child.unref()
-    return { isError: false, text: 'Claude Desktop will restart in ~4s. Start a new conversation.' }
+    return { isError: false, text: 'Claude Desktop will restart in ~6s. Start a new conversation. (log in restart.log)' }
   } catch (e) {
     return { isError: true, text: `restart failed: ${e.message}` }
   }
