@@ -295,8 +295,13 @@ const TOOLS = [
   },
   {
     name: 'restart_desktop',
-    description: 'Kill Claude Desktop and relaunch it. Requires a new conversation after restart.',
-    inputSchema: { type: 'object', properties: {} },
+    description: 'Kill Claude Desktop and relaunch it. Requires a new conversation after restart. Pass dryRun:true to return the generated restart script without executing (for inspection/testing).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        dryRun: { type: 'boolean', description: 'If true, return the restart script text instead of executing the restart.' },
+      },
+    },
   },
   {
     name: 'self_test',
