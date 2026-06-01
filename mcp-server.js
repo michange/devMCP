@@ -249,6 +249,16 @@ const TOOLS = [
     },
   },
   {
+    name: 'kill_stuck',
+    description: 'Kill orphaned test/browser processes by name when run_tests hangs (no result after a long wait). Allowed patterns only: vitest, chromium, playwright. Safe: pkill exit 1 (no match) is treated as success.',
+    inputSchema: {
+      type: 'object', required: ['pattern'],
+      properties: {
+        pattern: { type: 'string', enum: ['vitest', 'chromium', 'playwright'], description: 'Process name to pkill -f. One of the known orphan culprits.' },
+      },
+    },
+  },
+  {
     name: 'register_mcp',
     description: 'Register a new stdio MCP server in Claude Desktop config. Does NOT restart — use enable_mcp if you want register + restart in one shot.',
     inputSchema: {
