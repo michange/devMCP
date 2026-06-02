@@ -335,7 +335,7 @@ describe('restart_desktop', () => {
     // must clean up its own temp dir
     expect(text).toMatch(/rm -rf .*devmcp-restart-/)
     // race-fix: must wait long enough to flush the MCP response before quitting
-    const sleepBeforeQuit = text.match(/sleep (\d+)\s*\n\s*osascript/)
+    const sleepBeforeQuit = text.match(/sleep (\d+)[\s\S]*?quit app "Claude"/)
     expect(sleepBeforeQuit).toBeTruthy()
     expect(Number(sleepBeforeQuit[1])).toBeGreaterThanOrEqual(3)
   })
