@@ -1,35 +1,14 @@
 // extensions/project-management/project-management.test.js — write_plan extension
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readdirSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import extension from './index.js'
 import { validatePlan } from './plan/validate-plan.js'
+import { CYBUILD_STEPS, seedPlan } from './plan-fixture.js'
 
 const tool = extension[0]
-
-const CYBUILD_STEPS = ['PRE-READ', 'PURPOSE', 'TEST PLAN', 'RED', 'GREEN',
-  'REGRESSION', 'DEMO/DOCS', 'REVIEW', 'COMMIT']
-
-const seedPlan = (contract) => ({
-  project: {
-    name: 'probe', repo: '.', remote: 'origin', documentation: contract,
-    versions: [{
-      name: 'v1', status: 'active', specification: contract,
-      workPackages: [{
-        name: 'WP1-probe', status: 'active', contracts: [contract],
-        todos: [{
-          path: 'WP1-probe.first', status: 'in-progress',
-          workspace: { kind: 'branch', name: 'main' },
-          contracts: [contract],
-          cybuild: CYBUILD_STEPS.map((step) => ({ step, status: 'pending' })),
-          todos: [],
-        }],
-      }],
-    }],
-  },
-})
 
 const call = (overrides) => tool.handler({
   projectPath: root, baseVersion: '0.0.0', plan: seedPlan('./docs/contract.md'),

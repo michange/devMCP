@@ -1,6 +1,6 @@
 # Provenance of devMCP/skills/
 
-Twenty-one files, copied verbatim on 30 August 2026 from
+Copied verbatim from
 
     /Users/mic/PhpstormProjects/dontOver/enigma/skills/
 
@@ -27,16 +27,22 @@ documents. **This directory is where devMCP diverges from Enigma, on purpose and
 | `skill.cyBuildModule.md` | defines the nine phases and the fifteen steps the `cycle` field names |
 | `build/` — sixteen files | the step skills `cyBuildModule` refers to; `steps` in a custom cycle names exactly these |
 | `skill.runTestsOneByOne.md` | the contract `run_tests_one_by_one` implements |
+| `dialogue.skill.md` | the skill a todo runs when it declares no cycle |
+| `lisibilite.skill.md` | required reading of `dialogue.skill.md` |
 
 `skill.cyBuildModule.md` and `build/skill.cyBuildModule.md` are identical in Enigma. Both were
 copied so that either path resolves, as it does upstream.
 
 ## What was deliberately not copied
 
-`design-dialogue`, `lisibilite`, `tdd-list`, `requirement-traceability`, `worktree`,
-`session-restart`, `skill.getStatus.md`, and everything under
-`archive-do-not-use-without-user-permission/`. They are method, not devMCP tooling: devMCP neither
-implements them nor enforces their vocabulary. They stay in Enigma and are read from there.
+`tdd-list`, `requirement-traceability`, `worktree`, `session-restart`, `skill.getStatus.md`, and
+everything under `archive-do-not-use-without-user-permission/`. They are method, not devMCP tooling:
+devMCP neither implements them nor enforces their vocabulary. They stay in Enigma and are read from
+there.
+
+`dialogue.skill.md` and `lisibilite.skill.md` are the exception, and the reason is that devMCP does
+drive them. A todo that declares no cycle runs the `dialogue` skill, so the skill has to be present
+wherever devMCP is installed, and `dialogue` names `lisibilite` as required reading.
 
 One borderline case, left out on purpose: `skill.ò.cyMicrobuild.md`. It is a second pilot, and the
 `cy` field introduced by CR-001 exists so a todo can one day name it. It is not implemented by
@@ -61,8 +67,33 @@ Compare everything copied:
 
 ## Divergences
 
-None yet. The copy is exact.
+### `dialogue.skill.md` is `design-dialogue.skill.md` renamed
 
-CR-001 — declared cycles and declared gating — will introduce the first, in
-`manage-plan/SKILL.md`, `manage-plan/references/plan-template.md` and `skill.cyBuildModule.md`.
-See `../CR-001-cycles-and-gating.md`.
+The file is Enigma's `design-dialogue.skill.md`. Two strings differ: the `name` of its front matter
+and the `skDD` shortcut row, both reading `dialogue` here. A skill is resolved by file name, so the
+front matter has to agree with it.
+
+Its link to `ockham-memes.pdf` has no target here. That file is 1.23 MB, more than twice this whole
+repository, for an illustration of a table the text carries in full.
+
+Compare with:
+
+    diff <(sed 's/^name: dialogue$/name: design-dialogue/; s/^skDD   dialogue$/skDD   design-dialogue/' \
+            dialogue.skill.md) \
+         /Users/mic/PhpstormProjects/dontOver/enigma/skills/design-dialogue.skill.md
+
+### `lisibilite.skill.md` is copied verbatim
+
+`dialogue` requires it. No difference.
+
+### `cycles/` exists here and not in Enigma
+
+A cycle is a directory holding a YAML file of the same name, and the directory carries the skills its
+steps name, as files or as symbolic links. `cyPhases` and `cyBuild` are declared here;
+`docs/dev-mcp-plans.md` defines what a cycle is and how one is found.
+
+A `diff -r` against Enigma reports this directory as present on one side only. It is not an
+incomplete copy: nothing upstream corresponds to it.
+
+`cyBuild/` links the fifteen step skills of `build/` rather than duplicating their text, so a change
+to a step skill reaches the cycle with no second edit.

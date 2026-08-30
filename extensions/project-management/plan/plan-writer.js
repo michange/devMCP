@@ -6,6 +6,7 @@ import { missingContracts, stubContracts } from './stub-contracts.js'
 import { renderPlanHtml } from './render-plan.js'
 import { validationContext } from './plan-context.js'
 import { validatePlan } from './validate-plan.js'
+import { resolveCycle } from './cycles.js'
 
 
 const without = (value, key) => Object.fromEntries(Object.entries(value)
@@ -51,9 +52,35 @@ const defaults = {
  * A plan carrying any other error creates nothing. Repairing half of a refusal would leave files
  * behind a write that was rejected anyway.
  */
+// A todo whose shape is not settled is a conversation before it is a sequence, so an unfinished
+// todo that declares no cycle adopts the dialogue skill as this plan is published. A completed todo
+// is left alone: its record is history, and rewriting the method of finished work would claim it was
+// done a way it was not. The migration therefore spreads one plan at a time.
+const DEFAULT_TODO = 'dialogue'
+
+function migrateTodos(todos, cycle) {
+  for (const todo of todos ?? []) {
+    if (todo.status !== 'complete' && todo.cycle === undefined) {
+      todo.cycle = DEFAULT_TODO
+      todo.cybuild = cycle.steps.map(step => ({ step: step.name, status: 'pending' }))
+    }
+    migrateTodos(todo.todos, cycle)
+  }
+}
+
+function migrateCycles(plan, context) {
+  const cycle = resolveCycle(DEFAULT_TODO, context)
+  if (!cycle || cycle.name !== DEFAULT_TODO) return
+  for (const version of plan?.project?.versions ?? []) {
+    for (const workPackage of version.workPackages ?? []) migrateTodos(workPackage.todos, cycle)
+  }
+}
+
 async function validated(input) {
   const context = () => validationContext(input.projectPath)
-  const first = validatePlan(input.plan, context())
+  const initial = context()
+  migrateCycles(input.plan, initial)
+  const first = validatePlan(input.plan, initial)
   if (first.valid || !input.stubMissingContracts) return first
   if (!first.errors.every(error => error.code === 'CONTRACT_MISSING')) return first
   await stubContracts(input.projectPath, missingContracts(first.errors))
@@ -95,7 +122,7 @@ export async function writePlan(input, overrides = {}) {
   const oldHtml = join(plansPath, `plan-${input.baseVersion}.html`)
   if (await exists(oldHtml)) await unlink(oldHtml)
   try {
-    await writeFile(join(plansPath, `plan-${version}.html`), dependencies.renderHtml(input.plan))
+    await writeFile(join(plansPath, `plan-${version}.html`), dependencies.renderHtml(input.plan, validationContext(input.projectPath).cycles))
   } catch (error) {
     warnings.push({ code: 'PLAN_RENDER_FAILED', message: error.message })
   }

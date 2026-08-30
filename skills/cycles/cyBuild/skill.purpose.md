@@ -1,0 +1,1 @@
+../../build/skill.purpose.md

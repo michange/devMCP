@@ -1,0 +1,1 @@
+../../build/skill.behavior.md

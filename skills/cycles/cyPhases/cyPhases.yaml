@@ -1,0 +1,30 @@
+name: cyPhases
+description: The nine plan phases, as tracked before cycles were declarable. A todo that declares nothing follows this cycle, so every plan published earlier keeps validating unchanged.
+steps:
+  - name: PRE-READ
+    gated: true
+    skippable: true
+  - name: PURPOSE
+    gated: true
+    skippable: true
+  - name: TEST PLAN
+    gated: true
+    skippable: true
+  - name: RED
+    gated: true
+    skippable: true
+  - name: GREEN
+    gated: true
+    skippable: true
+  - name: REGRESSION
+    gated: true
+    skippable: true
+  - name: DEMO/DOCS
+    gated: true
+    skippable: true
+  - name: REVIEW
+    gated: true
+    skippable: true
+  - name: COMMIT
+    gated: true
+    skippable: true

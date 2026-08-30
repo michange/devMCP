@@ -25,27 +25,31 @@ const htmlExecution = execution => execution
   ? `<div class="execution">CLI: <code>${execution.cli}</code>${execution.session ? ` — session: <code>${escapeHtml(execution.session)}</code>` : ''}</div>`
   : ''
 
-function htmlTodos(todos) {
+function htmlTodos(todos, cycles) {
   if (todos.length === 0) return ''
   const items = todos.map(todo => {
     const state = stateClass(todo.status)
     const open = todo.status === 'complete' ? '' : ' open'
-    const phases = todo.cybuild.map(phase => {
+    // Gating belongs to the cycle, not to the plan, so a step is marked only when the caller
+    // supplies the cycle index. Without it the projection still renders, simply unmarked.
+    const steps = cycles?.[todo.cycle]?.steps ?? []
+    const phases = todo.cybuild.map((phase, index) => {
       const checked = ['complete', 'skipped'].includes(phase.status) ? ' checked' : ''
-      return `<label class="cybuild-${phase.status}"><input type="checkbox" disabled${checked}> ${escapeHtml(phase.step)} <small>${phase.status}</small></label>`
+      const gate = steps[index]?.gated ? ' gated' : ''
+      return `<label class="cybuild-${phase.status}${gate}"><input type="checkbox" disabled${checked}> ${escapeHtml(phase.step)} <small>${phase.status}</small></label>`
     }).join('')
-    return `<li><details class="todo-item"${open}><summary><span class="name ${state}">${escapeHtml(todo.path)}</span> <code>${todo.status}</code> — ${todo.workspace.kind}: <code>${escapeHtml(todo.workspace.name)}</code> — cycle: <code>${escapeHtml(todo.cycle ?? 'none')}</code></summary><div class="todo-body">${htmlExecution(todo.execution)}<div class="contracts">Contracts: ${htmlLinks(todo.contracts)}</div><fieldset><legend>Cybuild</legend>${phases}</fieldset>${htmlTodos(todo.todos)}</div></details></li>`
+    return `<li><details class="todo-item"${open}><summary><span class="name ${state}">${escapeHtml(todo.path)}</span> <code>${todo.status}</code> — ${todo.workspace.kind}: <code>${escapeHtml(todo.workspace.name)}</code> — cycle: <code>${escapeHtml(todo.cycle ?? 'none')}</code></summary><div class="todo-body">${htmlExecution(todo.execution)}<div class="contracts">Contracts: ${htmlLinks(todo.contracts)}</div><fieldset><legend>Cybuild</legend>${phases}</fieldset>${htmlTodos(todo.todos, cycles)}</div></details></li>`
   }).join('')
   return `<ul>${items}</ul>`
 }
 
-export function renderPlanHtml(plan) {
+export function renderPlanHtml(plan, cycles) {
   const project = plan.project
   const versions = project.versions.map(version => {
     const packages = version.workPackages.map(workPackage => {
       const state = stateClass(workPackage.status)
       const open = workPackage.status === 'complete' ? '' : ' open'
-      return `<details class="work-package"${open}><summary class="${state}"><span class="wp-emoji" aria-hidden="true">${wpEmoji(workPackage.name)}</span> ${escapeHtml(workPackage.name)} <code>${workPackage.status}</code></summary><div class="work-package-body">${htmlExecution(workPackage.execution)}<div class="contracts">Contracts: ${htmlLinks(workPackage.contracts)}</div>${htmlTodos(workPackage.todos)}</div></details>`
+      return `<details class="work-package"${open}><summary class="${state}"><span class="wp-emoji" aria-hidden="true">${wpEmoji(workPackage.name)}</span> ${escapeHtml(workPackage.name)} <code>${workPackage.status}</code></summary><div class="work-package-body">${htmlExecution(workPackage.execution)}<div class="contracts">Contracts: ${htmlLinks(workPackage.contracts)}</div>${htmlTodos(workPackage.todos, cycles)}</div></details>`
     }).join('')
     return `<h2>Version ${escapeHtml(version.name)} <code>${version.status}</code></h2><p>Specification: ${htmlLink(version.specification)}</p>${packages}`
   }).join('')

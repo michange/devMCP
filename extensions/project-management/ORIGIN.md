@@ -57,3 +57,36 @@ Five cases in `project-management.test.js` hold it, under `version status agains
 Per the rule above, this belongs upstream. It is not carried back yet, and it may refuse plans that
 already exist in the enigma repository — any version marked `complete` above a package that was
 never closed will stop publishing until one of the two statuses is corrected.
+
+## Divergence from enigma — a todo declares its cycle
+
+Recorded 31 August 2026. **Two modules exist here and not upstream**, and four of the copied ones
+differ.
+
+`plan/yaml.js` reads the YAML subset a cycle declaration uses. Node parses no YAML and devMCP has no
+runtime dependency, so the parser lives here. It covers nested keys, lists of mappings, booleans and
+strings, and refuses anything else with its line number.
+
+`plan/cycles.js` discovers cycle directories, checks the shape of each declaration, indexes them by
+name, and resolves a name to a cycle or, failing that, to a skill. It carries `CYPHASES`, the nine
+phases, built in rather than read from disk: a caller supplying no cycle index must still validate a
+todo that declares nothing, so that todo's validity cannot depend on a file being found.
+
+The four modified modules:
+
+| Module | Difference |
+|---|---|
+| `validate-plan.js` | no longer holds the nine phase names or the five cycle presets; `checkCybuild` takes the resolved cycle and checks length, step names in position, and that `skipped` falls on a step the cycle declares skippable |
+| `plan-context.js` | builds `cycles` and `skills` beside `branches` and `worktrees`, scanning devMCP's `skills/` then the project's on every call |
+| `plan-writer.js` | an unfinished todo declaring no cycle receives `cycle: dialogue` as the plan is published; a completed todo is untouched |
+| `render-plan.js` | `renderPlanHtml` takes the cycle index as a second argument and marks gated steps; without the index it renders unmarked |
+
+A `diff -r` against enigma reports `yaml.js` and `cycles.js` as present on one side only. They are
+not an incomplete copy: nothing upstream corresponds to them.
+
+`docs/dev-mcp-plans.md` defines what a cycle is, how one is declared and how a name resolves.
+Thirty-two cases hold this behaviour, in `yaml.test.js`, `cycles.test.js` and
+`cycle-declaration.test.js`.
+
+Per the rule above, this belongs upstream. It is not carried back yet, and it is the second
+outstanding divergence.

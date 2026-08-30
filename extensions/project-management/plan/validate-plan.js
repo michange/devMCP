@@ -1,22 +1,11 @@
 import { checkExact, checkObject, checkReferences, checkStatus, checkString } from './check-shape.js'
+import { resolveCycle } from './cycles.js'
 
 const VERSION_STATUSES = new Set(['planned', 'active', 'complete', 'archived'])
 const WP_STATUSES = new Set(['planned', 'ready', 'active', 'blocked', 'complete', 'deferred'])
 const TODO_STATUSES = new Set(['pending', 'ready', 'in-progress', 'blocked', 'complete', 'deferred', 'dropped'])
-const CYBUILD_STEPS = ['PRE-READ', 'PURPOSE', 'TEST PLAN', 'RED', 'GREEN', 'REGRESSION', 'DEMO/DOCS', 'REVIEW', 'COMMIT']
 const CYBUILD_STATUSES = new Set(['pending', 'in-progress', 'complete', 'skipped'])
 const TODO_SEGMENT = '[a-z][A-Za-z0-9-]*'
-
-// A todo declares which phases its work comprises. `none` requires nothing, and is what a todo
-// written before this field follows, so no published plan becomes invalid.
-const CYCLES = {
-  none: CYBUILD_STEPS,
-  text: ['PRE-READ', 'PURPOSE', 'DEMO/DOCS', 'REVIEW', 'COMMIT'],
-  restructuring: CYBUILD_STEPS.filter(step => !['TEST PLAN', 'RED'].includes(step)),
-  complete: CYBUILD_STEPS,
-  'npm-release': []
-}
-const CYCLE_NAMES = new Set(Object.keys(CYCLES))
 
 function checkWorkspace(workspace, path, context, errors) {
   if (!checkObject(workspace, path, ['kind', 'name'], errors)) return
@@ -29,21 +18,24 @@ function checkWorkspace(workspace, path, context, errors) {
   if (known && !known.has(workspace.name)) errors.push({ path: `${path}.name`, message: `${workspace.kind} does not exist` })
 }
 
-// A phase the declared cycle leaves out is not waiting, it will not happen: only `skipped` says so.
+// The tracking array records the run of the declared cycle, so it holds one entry per step of that
+// cycle, in its order. Only a step the cycle declares skippable may be marked skipped: skipping a
+// mandatory step is a claim the cycle forbids.
 function checkCybuild(cybuild, path, cycle, errors) {
-  if (!Array.isArray(cybuild) || cybuild.length !== CYBUILD_STEPS.length) {
-    errors.push({ path, message: `must contain ${CYBUILD_STEPS.length} ordered Cybuild steps` })
+  const steps = cycle.steps
+  if (!Array.isArray(cybuild) || cybuild.length !== steps.length) {
+    errors.push({ path, message: `must contain ${steps.length} ordered ${cycle.name} steps` })
     return
   }
-  const comprised = CYCLES[cycle] ?? CYCLES.none
-  cybuild.forEach((phase, index) => {
-    const phasePath = `${path}[${index}]`
-    if (!checkObject(phase, phasePath, ['step', 'status'], errors)) return
-    checkExact(phase.step, CYBUILD_STEPS[index], `${phasePath}.step`, errors)
-    checkStatus(phase.status, `${phasePath}.status`, CYBUILD_STATUSES, errors)
-    if (!comprised.includes(CYBUILD_STEPS[index]) && phase.status !== 'skipped') {
+  cybuild.forEach((entry, index) => {
+    const entryPath = `${path}[${index}]`
+    if (!checkObject(entry, entryPath, ['step', 'status'], errors)) return
+    checkExact(entry.step, steps[index].name, `${entryPath}.step`, errors)
+    checkStatus(entry.status, `${entryPath}.status`, CYBUILD_STATUSES, errors)
+    if (entry.status === 'skipped' && !steps[index].skippable) {
       errors.push({
-        path: `${phasePath}.status`, message: `must be skipped outside the ${cycle} cycle`
+        path: `${entryPath}.status`,
+        message: `${steps[index].name} is not skippable in the ${cycle.name} cycle`,
       })
     }
   })
@@ -77,7 +69,6 @@ function checkChildStatus(parentStatus, child, path, errors, kind = 'todo') {
 function validateTodo(todo, path, parentPath, contracts, seen, context, errors) {
   const keys = ['path', 'status', 'workspace', 'execution', 'contracts', 'cybuild', 'cycle', 'todos']
   if (!checkObject(todo, path, keys, errors, ['execution', 'cycle'])) return
-  if (todo.cycle !== undefined) checkStatus(todo.cycle, `${path}.cycle`, CYCLE_NAMES, errors)
   if (checkString(todo.path, `${path}.path`, errors)) {
     const expected = new RegExp(`^${parentPath}\\.${TODO_SEGMENT}$`)
     if (!expected.test(todo.path)) errors.push({ path: `${path}.path`, message: `must extend ${parentPath} by one todo segment` })
@@ -89,7 +80,15 @@ function validateTodo(todo, path, parentPath, contracts, seen, context, errors) 
   checkExecution(todo.execution, `${path}.execution`, errors)
   checkReferences(todo.contracts, `${path}.contracts`, contracts, context, errors,
     ['blocked', 'deferred', 'dropped'].includes(todo.status))
-  checkCybuild(todo.cybuild, `${path}.cybuild`, todo.cycle ?? 'none', errors)
+  const cycle = resolveCycle(todo.cycle, context)
+  if (!cycle) {
+    errors.push({
+      path: `${path}.cycle`,
+      message: `no cycle and no skill named ${todo.cycle}`,
+    })
+  } else {
+    checkCybuild(todo.cybuild, `${path}.cybuild`, cycle, errors)
+  }
   if (!Array.isArray(todo.todos)) {
     errors.push({ path: `${path}.todos`, message: 'must be an array' })
     return

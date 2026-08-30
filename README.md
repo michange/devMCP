@@ -51,7 +51,7 @@ Everything else comes from `extensions/`. See **[Extensions](#extensions)**.
 ### What self_test covers, and what it does not
 
 `self_test` runs one file, `mcp-server.unit.test.js`. Passing it is not the same as passing
-`npm test`, which runs the whole suite: **91 cases across 12 files**. Four of those currently fail on
+`npm test`, which runs the whole suite: **128 cases across 15 files**. Four of those currently fail on
 assertions about MCP servers present in one particular machine's configuration, and three are skipped.
 
 ## Install
@@ -186,9 +186,9 @@ thing that needs recording.
 | `git-push` | `git_push` | 7 |
 | `http-request` | `http_request` | — |
 | `npm-install` | `npm_install` | — |
-| `open-in-ide` | `open_in_ide` | — |
+| `open-in-ide` | `open_in_ide` | 5 |
 | `naude` | `naude_start` `naude_stop` `naude_restart` `kill_port` | — |
-| `project-management` | `write_plan` | 10 |
+| `project-management` | `write_plan` | 39 |
 | `force-model` | `force_model` | 15 |
 | `mcp-list` | `mcp_list` | 9 |
 | `mcp-self-scan` | `mcp_self_scan` | 9 + 1 |

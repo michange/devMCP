@@ -1,0 +1,63 @@
+name: cyBuild
+description: Build a module from spec to green tests, demo, review and commit. Fifteen steps, each driven by a skill in skills/build/.
+steps:
+  - name: preRead
+    skill: skill.preRead.md
+    gated: true
+    skippable: false
+  - name: purpose
+    skill: skill.purpose.md
+    gated: true
+    skippable: false
+  - name: architecture
+    skill: skill.architecture.md
+    gated: true
+    skippable: true
+  - name: behavior
+    skill: skill.behavior.md
+    gated: true
+    skippable: true
+  - name: toBeFs
+    skill: skill.toBeFs.md
+    gated: true
+    skippable: true
+  - name: tddList
+    skill: skill.tddList.md
+    gated: true
+    skippable: true
+  - name: red
+    skill: skill.red.md
+    gated: true
+    skippable: true
+  - name: implementation
+    skill: skill.implementation.md
+    gated: true
+    skippable: false
+  - name: matchConventions
+    skill: skill.matchConventions.md
+    gated: true
+    skippable: true
+  - name: green
+    skill: skill.green.md
+    gated: true
+    skippable: false
+  - name: regression
+    skill: skill.regression.md
+    gated: true
+    skippable: false
+  - name: demoDocs
+    skill: skill.demoDocs.md
+    gated: true
+    skippable: true
+  - name: review
+    skill: skill.review.md
+    gated: true
+    skippable: false
+  - name: commit
+    skill: skill.commit.md
+    gated: true
+    skippable: false
+  - name: push
+    skill: skill.push.md
+    gated: true
+    skippable: true
