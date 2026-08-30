@@ -7,7 +7,11 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CONFIG_PATH = join(__dirname, 'devmcp.config.json');
 const GATE_PORT = 3939;
-const ORIG_CONFIG = '{"gate":{"server":"http://localhost:3737","enabled":true}}';
+// Captured from disk, not hard-coded. These tests overwrite the repo's real devmcp.config.json,
+// so the afterAll hooks must put back what was actually there. A literal restored a state the
+// repo never declared -- enabled:true -- which armed the gate against a server that no longer
+// runs, and left every write_file, edit_file and git_push hanging for the full 120s timeout.
+const ORIG_CONFIG = existsSync(CONFIG_PATH) ? readFileSync(CONFIG_PATH, 'utf-8') : '{"gate":{"enabled":false}}';
 const TEST_FILE = '/tmp/gate-test-file.txt';
 
 // ── Tiny gate server ────────────────────────────────────────────────
