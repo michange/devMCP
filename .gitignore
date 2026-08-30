@@ -1,7 +1,5 @@
 node_modules/
 .tmp-test-*
+.tmp-env-*
 *.zip
 .idea/
-extensions/*/
-!extensions/.gitkeep
-!extensions/*/DESIGN.md
