@@ -57,18 +57,20 @@ function checkExecution(execution, path, errors) {
 }
 
 const FINISHED = new Set(['complete', 'deferred', 'dropped'])
-const STARTED = new Set(['in-progress', 'complete'])
+// `in-progress` is a todo's word for started work, `active` a work package's. Both belong here,
+// and neither status exists in the other's vocabulary, so one set serves every level.
+const STARTED = new Set(['in-progress', 'active', 'complete'])
 const UNSTARTED = new Set(['planned', 'ready'])
 
 // A parent's status is a claim about its children. Two claims can be checked: a finished node
 // holds no unfinished work, and an unstarted node holds no started work. The error goes on the
 // child, which is where the anomaly is, and where the reader must act.
-function checkChildStatus(parentStatus, child, path, errors) {
+function checkChildStatus(parentStatus, child, path, errors, kind = 'todo') {
   if (parentStatus === 'complete' && !FINISHED.has(child.status)) {
-    errors.push({ path: `${path}.status`, message: 'a complete parent holds no unfinished todo' })
+    errors.push({ path: `${path}.status`, message: `a complete parent holds no unfinished ${kind}` })
   }
   if (UNSTARTED.has(parentStatus) && STARTED.has(child.status)) {
-    errors.push({ path: `${path}.status`, message: 'an unstarted parent holds no started todo' })
+    errors.push({ path: `${path}.status`, message: `an unstarted parent holds no started ${kind}` })
   }
 }
 
@@ -134,7 +136,10 @@ function validateVersion(version, path, context, errors) {
     errors.push({ path: `${path}.workPackages`, message: 'must be a non-empty array' })
     return
   }
-  version.workPackages.forEach((wp, index) => validateWorkPackage(wp, `${path}.workPackages[${index}]`, context, errors))
+  version.workPackages.forEach((wp, index) => {
+    checkChildStatus(version.status, wp, `${path}.workPackages[${index}]`, errors, 'work package')
+    validateWorkPackage(wp, `${path}.workPackages[${index}]`, context, errors)
+  })
 }
 
 export function validatePlan(plan, context = {}) {

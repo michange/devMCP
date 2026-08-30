@@ -5,6 +5,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readdirSync 
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import extension from './index.js'
+import { validatePlan } from './plan/validate-plan.js'
 
 const tool = extension[0]
 
@@ -99,5 +100,54 @@ describe('write_plan extension', () => {
     expect(published).toContain('plan-0.0.1.json')
     expect(published).toContain('plan-0.0.1.html')
     expect(readdirSync(join(root, 'plans', 'archive'))).toContain('plan-0.0.0.json')
+  })
+})
+
+// A version's status is a claim about its work packages. Upstream enigma checks that claim from
+// the work package down and never at the version level, so a version could be declared complete
+// above a package still open. These cases hold the divergence recorded in ORIGIN.md.
+describe('version status against its work packages', () => {
+
+  const contract = './docs/contract.md'
+  const context = {
+    referenceExists: (reference) => reference === contract,
+    branches: new Set(['main']),
+    worktrees: new Set(),
+  }
+
+  const withStatuses = (versionStatus, wpStatus, todoStatus, phase) => {
+    const plan = seedPlan(contract)
+    const version = plan.project.versions[0]
+    version.status = versionStatus
+    version.workPackages[0].status = wpStatus
+    version.workPackages[0].todos[0].status = todoStatus
+    version.workPackages[0].todos[0].cybuild = CYBUILD_STEPS.map((step) => ({ step, status: phase }))
+    return plan
+  }
+
+  const messages = (plan) => validatePlan(plan, context).errors.map((error) => error.message)
+
+  it('refuses an active work package under a complete version', () => {
+    expect(messages(withStatuses('complete', 'active', 'complete', 'complete')))
+      .toContain('a complete parent holds no unfinished work package')
+  })
+
+  it('refuses a complete work package under a planned version', () => {
+    expect(messages(withStatuses('planned', 'complete', 'complete', 'complete')))
+      .toContain('an unstarted parent holds no started work package')
+  })
+
+  it('counts an active work package as started, which the todo vocabulary does not name', () => {
+    expect(messages(withStatuses('planned', 'active', 'pending', 'pending')))
+      .toContain('an unstarted parent holds no started work package')
+  })
+
+  it('accepts a deferred work package under a complete version', () => {
+    expect(messages(withStatuses('complete', 'deferred', 'deferred', 'skipped'))).toEqual([])
+  })
+
+  it('still names a todo, not a work package, one level down', () => {
+    expect(messages(withStatuses('active', 'complete', 'in-progress', 'pending')))
+      .toContain('a complete parent holds no unfinished todo')
   })
 })
