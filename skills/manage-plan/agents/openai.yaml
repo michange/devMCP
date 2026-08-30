@@ -1,0 +1,4 @@
+interface:
+  display_name: "Manage Plan"
+  short_description: "Create and update contract-driven project plans"
+  default_prompt: "Use $manage-plan to prepare and atomically publish a project plan."
