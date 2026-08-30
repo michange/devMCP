@@ -14,24 +14,41 @@ missing rather than failing opaquely.
 
 ## Tool
 
-`open_in_ide` requires `path`. The optional `line` is passed to the IDE as `--line <n>`, so the editor
-opens with the cursor already there. The tool launches the IDE through `execFile` with a 10-second
-timeout and resolves once the process reports back.
+`open_in_ide` requires `path`. The optional `line` asks the editor to place the cursor there. The tool
+launches the IDE with `open -a PhpStorm`, with a 10-second timeout, and resolves once `open` reports
+back. An `_exec` argument replaces the launcher, which is how the tests observe the command without
+starting anything.
 
-## Known failure
+## Why not the application binary
 
-The IDE path is the constant `/Applications/PhpStorm.app/Contents/MacOS/phpstorm`, and calling that
-binary directly has been observed to fail with `open failed: Command failed`, while
-`open -a "PhpStorm" <path>` opens the same file without error. The binary appears not to return
-promptly enough for the timeout when the IDE is already running.
+The tool used to call `/Applications/PhpStorm.app/Contents/MacOS/phpstorm` directly. That binary
+cannot hand a file to an instance that is already running. With the project open it exits 15 on
+`project name=<name>, locationHash=<hash> is already opened`, and it has also been observed
+returning a success the handler reported as `opened <path> in PhpStorm` while nothing appeared on
+screen. Either way the file does not open, and one of the two ways says it did.
 
-Until this is fixed, `open -a` is the reliable way to open a file, and a caller that depends on the
-document actually appearing should treat a failure here as expected rather than as a missing file.
+That second case is worse than an outright failure. Four steps of the build cycle present a document
+for review by opening it, and a caller told the document was open had no way to learn it never was.
+
+`open -a` has no such problem: macOS routes the file to the running instance, and reports a real
+failure when it cannot.
+
+## The line number is best effort
+
+With a line number every argument goes to the application, so the file travels inside `--args` as
+well. macOS hands those arguments over only when it starts the application. An already-running
+PhpStorm receives the file and ignores the line.
+
+The returned text says so rather than implying the cursor moved. A caller that needs the line
+honoured has to know whether the IDE was already running, which the tool cannot determine.
 
 ## Limits
 
-The IDE is not configurable. The tool opens PhpStorm or it opens nothing, and the path assumes macOS.
+The IDE is not configurable. The tool opens PhpStorm or it opens nothing, and `open -a` is macOS.
 
 ## Tests
 
-None of its own.
+Five cases in `open-in-ide.test.js`, using the `_exec` injection point. They assert that the command
+is `open`, that no argument mentions `Contents/MacOS`, that a line number moves the file inside
+`--args`, that a launcher failure is reported instead of claimed as success, and that a missing file
+launches nothing.

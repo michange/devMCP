@@ -67,8 +67,6 @@ names the reason.
 
 ## Smaller debts
 
-- `open_in_ide` calls `/Applications/PhpStorm.app/Contents/MacOS/phpstorm` directly and fails, while
-  `open -a "PhpStorm"` opens the same file. See `extensions/open-in-ide/DESIGN.md`.
 - `.DS_Store` and `extensions/.DS_Store` are tracked and should not be.
 - `extensions/naude/index.js` holds three absolute paths into `naude-new`. Reading them from
   configuration, as `gate` reads `devmcp.config.json`, would make the extension portable.
