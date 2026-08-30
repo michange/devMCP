@@ -376,7 +376,7 @@ async function handleRequest({ id, method, params }) {
       respond(id, {
         protocolVersion: '2024-11-05',
         capabilities: { tools: {} },
-        serverInfo: { name: 'devMCP', version: '1.9.0' },
+        serverInfo: { name: 'devMCP', version: '2.0.0' },
       })
       break
     case 'notifications/initialized': break

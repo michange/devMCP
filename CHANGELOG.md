@@ -1,12 +1,39 @@
 # Changelog
 
+## 2.0.0
+
+- **gate**: web-based write approval. `write_file` and `edit_file` open a browser page on the user's screen, and the user approves or rejects there. The page is a side channel: the calling agent never sees it and cannot answer for the user. Shipped after 1.9.0 and listed under 1.7.0 by mistake until this release.
+- **devmcp.config.json**: config file at the repository root. `gate.server` holds the approval server URL and `gate.enabled` turns gating on or off. Both are read fresh on every call, so a change takes effect without a restart.
+- **safety commit**: every gated write is preceded by an automatic git commit prefixed `[devmcp-safety]`, which gives a rollback point. It does nothing outside a git repository or in a clean one.
+- **built-in extensions**: bash (read-only shell), fs (read_file, write_file, list_directory), edit-file (surgical str_replace), gate (approval and safety commit, exposing no tool of its own).
+- **project-management**: new extension exposing `write_plan`, which validates the next canonical project plan, archives its predecessor and renders the adjacent HTML projection. The plan modules are a verbatim copy of enigma `tools/plan-mcp`; see `extensions/project-management/ORIGIN.md`.
+- **project-management**: `validateVersion` now checks every work package against its version's status. It previously checked none, so a version could be declared complete above a work package still active and publish in silence. `active` joins the set of started statuses, because `in-progress` is a todo's word for started work and `active` is a work package's.
+- **gate**: flagged as orphan code. The three `/gate` routes were served by voteCards, which has since been archived, so nothing gates today and `gate.enabled` ships as `false`. The code is kept so a future host can serve the same routes.
+- **extensions in git**: `.gitignore` ignored `extensions/*/`, so ten extensions had never entered the repository and existed on one disk only — bash, edit-file, force-model, fs, git, git-push, http-request, npm-install, open-in-ide, and `gate/index.js`. The rule is dropped and all ten are now tracked. It also made `git add` refuse tracked files under `extensions/`, which forced `-f` on every commit touching them.
+- **test**: `gate.test.mjs` restores the configuration the repository actually had. It used to write back a hard-coded literal with `enabled: true`, so every `npm test` left the working tree dirty and armed the gate against a server that no longer runs. The next gated call then hung for the full 120 s timeout and failed with "Gate timed out".
+- **test**: the suite counts 91 cases. Two of the 93 previously reported were throwaway fixtures left behind by interrupted runs in `.tmp-test-*` and `.tmp-env-*`, which vitest collected as if they were real suites. `.tmp-env-*` joins `.tmp-test-*` in `.gitignore`.
+- **version**: `package.json`, the `serverInfo` block of `mcp-server.js` and this file now agree. They declared 1.6.0, 1.9.0 and 1.7.0 respectively.
+
+## 1.9.0
+
+- **mcp-list**: new extension exposing `mcp_list`, which reads the four client configuration sources and returns the merged MCP servers as JSON, each annotated with the source it came from. A `noCache` parameter forces a raw file-descriptor read.
+- **mcp-self-scan**: new extension exposing `mcp_self_scan`, which shells out to `claude mcp list` and parses the CLI output into JSON.
+- **mcp-twin-scan**: new extension exposing `mcp_twin_scan`, which runs the file scan and the CLI scan in parallel and reports what each one sees. Running both costs what the CLI scan alone costs, so the second opinion is free.
+- **naude**: new extension exposing `naude_start`, `naude_stop`, `naude_restart` and `kill_port`. `naude_start` accepts a `configPath` that `naude_restart` reuses, and the restart polls for health before returning.
+- **perf**: benchmarks comparing the two discovery paths. Reading the configuration files takes about 0.5 ms; asking the CLI takes about 440 ms. `mcp_list` returns an `_meta.elapsedMs` field.
+
+## 1.8.0
+
+- **run_tests_one_by_one**: new core tool. It runs a suite one test at a time, addressed by rank, and returns each verdict separately, so the agent drives the loop instead of reading one aggregated report.
+
+## 1.7.1
+
+- **run_tests**: new `pattern` parameter, passed to vitest as `-t`. It selects individual tests by name, by substring or by regular expression.
+
 ## 1.7.0
 
-- **gate**: web-based write approval. `write_file` and `edit_file` open a browser tab on the user's screen for approve/reject. Side channel — Claude cannot see or interact with the approval page.
-- **devmcp.config.json**: new config file. `gate.server` sets the approval server URL, `gate.enabled` toggles gating on/off. Read fresh on every call.
-- **safety commit**: auto git commit before every gated write. Rollback point with `[devmcp-safety]` prefix. No-ops outside git repos.
-- **built-in extensions**: bash (read-only shell), fs (read_file, write_file, list_directory), edit-file (surgical str_replace), gate (approval + safety commit).
-- **test**: 9 gate tests (5 unit, 4 integration) with DI via `_gateOpts` and mock gate server on :3939. Config save/restore in afterAll.
+- **register_mcp**: warns when an argument looks like a relative path. Claude Desktop ignores the working directory, so a relative script path registers a server that cannot start.
+- **README**: extensions guide, covering the loader contract and the absolute-path requirement.
 
 ## 1.6.0
 
