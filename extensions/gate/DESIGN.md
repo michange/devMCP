@@ -1,5 +1,25 @@
 # Gate — web-based write approval
 
+> **STATUS: ORPHAN CODE — disabled, kept for backward compatibility.**
+>
+> `devmcp.config.json` ships `gate.enabled: false`. Nothing in devMCP gates today.
+>
+> The gate never hosted its own server: it depends on a host app serving the three routes
+> below. That host was voteCards, which has since been archived. The routes now live only in
+> `/Users/mic/PhpstormProjects/voteCards-archive/src/server.js` (branch `legacy/main`,
+> `GET /gate` line 293, `POST /gate/respond` 336, `GET /gate/status` 342). The current
+> `voteCards` has no server at all.
+>
+> The code is kept, not deleted, so a future host — `naude-new` is the owner's intent — can
+> serve the same three routes and switch `enabled` back to `true` without rewriting devMCP.
+> As of 30 August 2026 `naude-new` implements none of them; wiring it up is the work that
+> would end this orphan status.
+>
+> Until then: `gate()` returns immediately, `safetyCommit()` never runs, and `write_file`,
+> `edit_file` and `git_push` are ungated. Turning `enabled` on without a live server makes
+> every one of them hang for the full 120 s timeout.
+
+
 ## Problem
 
 MCP servers cannot securely gate themselves against the agent calling them. The agent (Claude) is the middleman for all tool calls — any token-based approval flows through Claude, who can forge or replay it. Claude Desktop's built-in MCP permission dialog is per-server, irreversible, and undocumented.
