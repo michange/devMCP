@@ -11,16 +11,40 @@ entered git were committed, and the three version declarations were aligned on 2
 
 ---
 
-## CR-001 — declared cycles and declared gating
+## Next milestone — ungating a CLI from devMCP
 
-`CR-001-cycles-and-gating.md`, in this repository, is a complete change request and the largest
-piece of work waiting. It lets a plan todo declare which cycle steps run and which of them stop for
-an approval, instead of choosing among five presets and negotiating the gating in chat where it is
-then lost.
+A session interrupted by approval prompts stops for something it was already allowed to do. As
+`skills/session-permissions/SKILL.md` puts it in Enigma, removing an approval removes a stopping
+point, never a capability: the agent could already perform the action, it was asking first.
 
-It touches six files, three of them under `skills/`, and carries its own acceptance criteria. The
-compatibility table it publishes is the test plan: every plan that validates today must still
-validate with identical phase constraints.
+That skill defines the whole method, in 215 lines and for both CLIs. It says to read the effective
+state before proposing anything — `~/.claude/settings.json`, then the worktree's `.claude/settings.json`
+and `.claude/settings.local.json` under Claude Code, and `~/.codex/config.toml` with its
+`[projects."<path>"]` blocks under Codex. It says to choose a scope first, session being the default
+because it dies with the process, worktree only after the same loosening has been repeated three
+times, and global almost never because it outlives the need that caused it. It says to prefer a
+narrow allow list to a blanket mode, and to keep `bypassPermissions` and `danger-full-access` for
+worktrees whose deletion costs nothing. And it says to confirm flag names against the installed
+binary rather than from memory, since a wrong flag either fails loudly or is silently ignored.
+
+What is missing is the tooling. Every one of those steps is a file to read, a precedence to resolve
+and an edit to make correctly, which is what an agent does badly by hand and a tool does the same way
+every time.
+
+devMCP already holds the pattern. `force_model` pins a value in `~/.claude/settings.json`, snapshots
+the original state once so a restore returns to pre-force truth, records what it forced so a change
+made outside the tool is detected rather than silently reverted, and offers `adopt` for the case
+where that outside change should stand. Permissions need the same four moves against more files, and
+one more thing `force_model` does not need: a scope, since the same setting has three homes with
+different lifetimes.
+
+Open questions, before any code:
+
+- whether devMCP reads Codex configuration at all, or whether that belongs behind the client adapter
+  of Part B, which exists precisely to hold what is specific to one client;
+- whether a loosening carries an expiry, so that a session-scoped setting cannot outlive the session
+  that asked for it when the process dies without cleaning up;
+- whether the tool refuses a blanket mode outside a worktree it can verify is disposable.
 
 ## Part B — the client adapter
 
@@ -81,5 +105,5 @@ three routes has been archived. The code is kept so that a future host — `naud
 can serve them. `extensions/gate/DESIGN.md` carries the full statement.
 
 The plan format stays authored in enigma. Two divergences are outstanding and recorded in
-`extensions/project-management/ORIGIN.md`: the version-status fix in `validate-plan.js`, and CR-001
-once it lands.
+`extensions/project-management/ORIGIN.md`: the version-status fix in `validate-plan.js`, and the
+declared cycles.
