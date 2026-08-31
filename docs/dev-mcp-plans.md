@@ -12,7 +12,7 @@ a name. Each step declares two things about itself: whether it stops for a human
 next one begins — it is **gated** — and whether it may be left out of a run — it is **skippable**.
 
 Nothing about a cycle is privileged. The nine phases that plans have tracked until now are a cycle
-named `cyPhases`, sitting beside every other, and the fifteen-step build cycle is one named
+named `cyPhases`, sitting beside every other, and the sixteen-step build cycle is one named
 `cyBuild`.
 
 ## Where a cycle is declared
@@ -39,7 +39,7 @@ over the skill.
 It exists so that a plan written before this document keeps validating, and so that a todo can still
 ask for that sequence by name.
 
-`cyBuild` holds the fifteen steps of the build cycle, each linking a skill that already lives in
+`cyBuild` holds the sixteen steps of the build cycle, each linking a skill that already lives in
 `skills/build/`. A project declares its own by
 placing directories in its `skills/cycles/`.
 
@@ -114,7 +114,7 @@ A todo's `cybuild` array records where the work stands. It holds one entry per s
 cycle, in that cycle's order, each with a status among `pending`, `in-progress`, `complete` and
 `skipped`.
 
-A todo declaring nothing follows `cyPhases` and holds its nine entries. A todo declaring `cyBuild` holds fifteen. The field is named `cybuild` whatever the cycle it records.
+A todo declaring nothing follows `cyPhases` and holds its nine entries. A todo declaring `cyBuild` holds sixteen. The field is named `cybuild` whatever the cycle it records.
 
 Only a step the cycle declares `skippable` may be marked `skipped`.
 

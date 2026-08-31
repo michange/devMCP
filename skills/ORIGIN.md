@@ -10,7 +10,7 @@ and verified byte for byte at the time of copying.
 
 devMCP implements part of Enigma's method as tools. `write_plan` implements `manage-plan`;
 `run_tests_one_by_one` implements `skill.runTestsOneByOne.md`; and `validate-plan.js` enforces the
-vocabulary that `skill.cyBuildModule.md` and `build/` define — the nine plan phases, the fifteen
+vocabulary that `skill.cyBuildModule.md` and `build/` define — the nine plan phases, the sixteen
 cycle steps, the cycle names.
 
 A tool cannot enforce a contract it does not carry. When devMCP extends that vocabulary — and
@@ -24,7 +24,7 @@ documents. **This directory is where devMCP diverges from Enigma, on purpose and
 | `manage-plan/SKILL.md` | the contract `write_plan` implements |
 | `manage-plan/references/plan-template.md` | the plan shape `validate-plan.js` checks |
 | `manage-plan/agents/openai.yaml` | ships with the skill |
-| `skill.cyBuildModule.md` | defines the nine phases and the fifteen steps the `cycle` field names |
+| `skill.cyBuildModule.md` | defines the nine phases and the sixteen steps the `cycle` field names |
 | `build/` — sixteen files | the step skills `cyBuildModule` refers to; `steps` in a custom cycle names exactly these |
 | `skill.runTestsOneByOne.md` | the contract `run_tests_one_by_one` implements |
 | `dialogue.skill.md` | the skill a todo runs when it declares no cycle |
@@ -86,6 +86,22 @@ Compare with:
 
 `dialogue` requires it. No difference.
 
+### `requirements` is a step Enigma does not have
+
+`build/skill.requirements.md` exists here only. It turns an accepted purpose into the contract's
+atomic obligations, each tagged, before any structure is proposed — a design answers obligations,
+and obligations written after a design describe that design instead of the need.
+
+It sits between `purpose` and `architecture`, inside the PURPOSE phase, so the plan still records
+nine phases. Both copies of `skill.cyBuildModule.md` differ from Enigma accordingly: the step table
+gains a row, the phase table lists it under PURPOSE, the pilot runs sixteen steps rather than
+fifteen, and the `text` cycle runs it beside `purpose` — a skill or a contract is precisely the kind
+of deliverable whose obligations are worth stating.
+
+Enigma covers the same ground with `requirement-traceability`, which is not copied here. That skill
+governs the whole traceability audit, from contract tags to the TDD list's `Contract` column and its
+missing, unknown and duplicate checks. This one covers only the writing of the obligations.
+
 ### `cycles/` exists here and not in Enigma
 
 A cycle is a directory holding a YAML file of the same name, and the directory carries the skills its
@@ -95,5 +111,5 @@ steps name, as files or as symbolic links. `cyPhases` and `cyBuild` are declared
 A `diff -r` against Enigma reports this directory as present on one side only. It is not an
 incomplete copy: nothing upstream corresponds to it.
 
-`cyBuild/` links the fifteen step skills of `build/` rather than duplicating their text, so a change
+`cyBuild/` links the sixteen step skills of `build/` rather than duplicating their text, so a change
 to a step skill reaches the cycle with no second edit.

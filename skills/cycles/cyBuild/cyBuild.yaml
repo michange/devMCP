@@ -1,5 +1,5 @@
 name: cyBuild
-description: Build a module from spec to green tests, demo, review and commit. Fifteen steps, each driven by a skill in skills/build/.
+description: Build a module from spec to green tests, demo, review and commit. Sixteen steps, each driven by a skill in skills/build/.
 steps:
   - name: preRead
     skill: skill.preRead.md
@@ -9,6 +9,10 @@ steps:
     skill: skill.purpose.md
     gated: true
     skippable: false
+  - name: requirements
+    skill: skill.requirements.md
+    gated: true
+    skippable: true
   - name: architecture
     skill: skill.architecture.md
     gated: true

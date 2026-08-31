@@ -26,6 +26,7 @@ proposal with an empty or generic step list is not a proposal.
 |------------------|----------------------------------------------------------|
 | preRead          | Present findings                                         |
 | purpose          | Present deliverable definition                           |
+| requirements     | Present the tagged obligations of the contract           |
 | architecture     | Present doc — see Document presentation                  |
 | behavior         | Present doc — see Document presentation                  |
 | toBeFs           | Present file structure                                   |
@@ -42,13 +43,13 @@ proposal with an empty or generic step list is not a proposal.
 
 ## Steps, plan phases, and declared cycles
 
-The plan records nine phases; this pilot runs fifteen steps. A phase completes when its last
+The plan records nine phases; this pilot runs sixteen steps. A phase completes when its last
 constituent step is accepted, so intermediate steps can be ungated without changing the plan's shape.
 
 | Plan phase | Steps |
 |------------|-------------------------------------------|
 | PRE-READ   | `preRead`                                 |
-| PURPOSE    | `purpose`, `architecture`, `behavior`, `toBeFs` |
+| PURPOSE    | `purpose`, `requirements`, `architecture`, `behavior`, `toBeFs` |
 | TEST PLAN  | `tddList`                                 |
 | RED        | `red`                                     |
 | GREEN      | `implementation`, `matchConventions`, `green` |
@@ -64,11 +65,11 @@ A todo declares the cycle it follows, and that cycle decides which steps run:
 | Cycle           | Steps that run                                                                  |
 |-----------------|---------------------------------------------------------------------------------|
 | `none`          | every step; the todo declares nothing and the plan requires nothing of it        |
-| `text`          | `preRead`, `purpose`, `demoDocs`, `review`, `commit`                            |
+| `text`          | `preRead`, `purpose`, `requirements`, `demoDocs`, `review`, `commit`            |
 | `restructuring` | every step except `tddList` and `red`                                           |
 | `complete`      | every step                                                                      |
 
-Under `text`, the PURPOSE phase runs `purpose` alone: `architecture`, `behavior` and `toBeFs` have no
+Under `text`, the PURPOSE phase runs `purpose` and `requirements`: `architecture`, `behavior` and `toBeFs` have no
 object for a document. A skill, a contract or a briefing has no test plan and no RED either, because
 no assertion can fail on a writing rule.
 
