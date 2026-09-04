@@ -5,7 +5,7 @@
 // not that they are the only tools.
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { spawn } from 'node:child_process'
+import { spawn, execFileSync } from 'node:child_process'
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -263,7 +263,18 @@ const FIXTURE_CONFIG_9876 = join(__dirname, 'fixtures/config-test-9876.json')
 describe('naude_restart (isolated :9876)', () => {
   let server
 
-  afterEach(() => { server?.kill() })
+  // naude_start and naude_restart launch real naude.js kernels with the :9876
+  // fixture. Those kernels are reparented to init and outlive the devMCP server,
+  // so killing the server alone leaks one kernel per call, and each kernel keeps
+  // its own Playwright MCP server alive. Terminate them explicitly.
+  afterEach(() => {
+    server?.kill()
+    try {
+      execFileSync('pkill', ['-f', `naude.js ${FIXTURE_CONFIG_9876}`], { stdio: 'ignore' })
+    } catch {
+      // pkill exits non-zero when no kernel is left to terminate.
+    }
+  })
 
   it('naude_restart appears in tools/list', async () => {
     server = spawnServer()
