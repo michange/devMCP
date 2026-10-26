@@ -3,3 +3,7 @@ node_modules/
 .tmp-env-*
 *.zip
 .idea/
+
+# Environnement Python du parser VoteCards -- 1,3 Go, jamais commite
+extensions/votecards-syntax/.venv/
+__pycache__/
